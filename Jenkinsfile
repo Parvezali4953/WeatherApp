@@ -10,6 +10,7 @@ pipeline {
         CONTAINER_NAME = "Flask-WeatherApp"
         APP_PORT = "5000"
         PUBLIC_PORT = "80"
+        }
     }
 
     stages {
