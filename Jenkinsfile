@@ -48,6 +48,7 @@ pipeline {
                     """
                 }
             }
+        }
 
         stage('Deploy on EC2 with Docker Compose') {
             steps {
@@ -75,4 +76,3 @@ pipeline {
             echo '❌ CI/CD failed. Check logs.'
         }
     }
-}
