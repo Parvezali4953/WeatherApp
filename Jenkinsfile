@@ -36,6 +36,15 @@ pipeline {
                 }
             }
         }
+        stage('Deploy to EC2 using Ansible') { 
+            steps {
+                sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
+                    sh """
+                        ansible-playbook -i inventory.ini Ansible-Playbook.yml
+                    """
+                }
+            }
+        }
 
         stage('Copy Deployment Files to EC2') {
             steps{
@@ -75,4 +84,8 @@ pipeline {
             echo '❌ CI/CD failed. Check logs.'
         }
     }
-}
+}   
+
+
+
+
