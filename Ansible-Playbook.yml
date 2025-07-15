@@ -7,24 +7,14 @@
     - name: Update apt cache
       apt:
         update_cache: yes
-      
-     # 🐍 Install Python and pip
-    - name: Install system dependencies
+        
+    - name: Install Python and pip
       apt:
         name: 
           - python3
           - python3-pip
-          - software-properties-common
-          - apt-transport-https
-          
         state: present
-
-    - name: Install Python modules
-      pip:
-        name: 
-          - ansible
-          - six
-
+        
     - name: Install Docker
       apt:
         name: docker.io
