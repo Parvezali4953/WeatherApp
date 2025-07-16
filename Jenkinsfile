@@ -40,7 +40,7 @@ pipeline {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     sh """
-                        ansible-playbook -i inventory.ini Ansible-Playbook.yml
+                        ansible-playbook -i inventory.ini ansible-playbook.yml
                     """
                 }
             }
