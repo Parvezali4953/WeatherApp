@@ -5,7 +5,7 @@ pipeline {
         DOCKER_IMAGE = "parvezali4953/flask-weather-app"
         DOCKER_CREDENTIALS_ID = "DockerHub"
         EC2_USER = "My_WeatherApp"
-        EC2_IP = "15.207.71.27"
+        EC2_IP = "65.1.100.30"
         EC2_CREDENTIAL_ID = "EC2-SSH"
         CONTAINER_NAME = "Flask-WeatherApp"
         APP_PORT = "5000"
