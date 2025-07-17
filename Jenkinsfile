@@ -40,7 +40,7 @@ pipeline {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     sh """
-                        source /home/parvezali/weatherapp-venv/venv/bin/activate
+                        . /home/parvezali/weatherapp-venv/venv/bin/activate
                         ansible-playbook -i inventory.ini ansible-playbook.yml
                         
                     """
