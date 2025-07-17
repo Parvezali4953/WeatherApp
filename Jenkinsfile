@@ -40,10 +40,9 @@ pipeline {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     sh """
-                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << EOF
-                        source ~/ansible-env/bin/activate
+                        source /home/parvezali/weatherapp-venv/venv/bin/activate
                         ansible-playbook -i inventory.ini ansible-playbook.yml
-                        EOF
+                        
                     """
                 }
             }
