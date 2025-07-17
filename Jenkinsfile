@@ -40,6 +40,7 @@ pipeline {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     sh """
+                        export ANSIBLE_HOST_KEY_CHECKING=False
                         ansible-playbook -i inventory.ini ansible-playbook.yml
                     """
                 }
