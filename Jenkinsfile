@@ -53,6 +53,8 @@ pipeline {
             steps{
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     sh """
+                        scp ansible-playbook.yml ${EC2_USER}@${EC2_IP}:/home/${EC2_USER}/
+                        scp inventory.ini ${EC2_USER}@${EC2_IP}:/home/${EC2_USER}/
                         scp docker-compose.yml ${EC2_USER}@${EC2_IP}:/home/${EC2_USER}/
                         scp nginx/default.conf ${EC2_USER}@${EC2_IP}:/home/${EC2_USER}/nginx.conf
                      
