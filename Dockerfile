@@ -2,7 +2,7 @@
 FROM python:3.10-slim
 
 # Set working directory
-WORKDIR /WeatherApp
+WORKDIR /app
 
 # Copy requirements.txt first (if available), else install manually
 COPY requirements.txt .
@@ -13,8 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy rest of the app files
 COPY . .
 
+# Set environment variables
+ENV API_KEY=$API_KEY
+
 # Expose port (Flask default)
 EXPOSE 5000
 
 # Run the Flask app
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
