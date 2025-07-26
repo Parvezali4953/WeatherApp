@@ -43,7 +43,8 @@ sudo apt update
 sudo apt install -y docker.io || echo "Docker install failed"
 sudo systemctl start docker
 sudo systemctl enable docker
-echo "Docker setup complete."
+sudo usermod -aG docker ${EC2_USER}
+echo "Docker setup complete. User added to docker group."
 EOF
                     """
                 }
@@ -57,12 +58,12 @@ EOF
                         echo "Deploying to EC2 with API_KEY set..."
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
 echo "Pulling image..."
-docker pull ${DOCKER_IMAGE}:latest || { echo "Pull failed"; exit 1; }
+sudo docker pull ${DOCKER_IMAGE}:latest || { echo "Pull failed"; exit 1; }
 echo "Stopping old container..."
-docker stop ${CONTAINER_NAME} || true
-docker rm ${CONTAINER_NAME} || true
-echo "Running new container with API_KEY: ${API_KEY}"
-docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=${API_KEY} ${DOCKER_IMAGE}:latest || { echo "Run failed"; exit 1; }
+sudo docker stop ${CONTAINER_NAME} || true
+sudo docker rm ${CONTAINER_NAME} || true
+echo "Running new container with API_KEY: \${API_KEY}"
+sudo docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=\${API_KEY} ${DOCKER_IMAGE}:latest || { echo "Run failed"; exit 1; }
 EOF
                         """
                     }
