@@ -37,18 +37,18 @@ pipeline {
                     sh '''
                     echo "Attempting SSH to ${EC2_IP}..."
                     ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${EC2_USER}@${EC2_IP} << 'EOF'
-                    echo "SSH connection successful."
-                    echo "Checking system..."
-                    uname -a
-                    echo "Updating packages..."
-                    sudo apt update
-                    echo "Installing Docker..."
-                    sudo apt install -y docker.io || { echo "Docker install failed"; exit 1; }
-                    echo "Starting Docker..."
-                    sudo systemctl start docker
-                    sudo systemctl enable docker
-                    echo "Docker setup complete."
-                    EOF
+                        echo "SSH connection successful."
+                        echo "Checking system..."
+                        uname -a
+                        echo "Updating packages..."
+                        sudo apt update
+                        echo "Installing Docker..."
+                        sudo apt install -y docker.io || { echo "Docker install failed"; exit 1; }
+                        echo "Starting Docker..."
+                        sudo systemctl start docker
+                        sudo systemctl enable docker
+                        echo "Docker setup complete."
+                        EOF
                     '''
                 }
             }
