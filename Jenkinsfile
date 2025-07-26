@@ -32,17 +32,23 @@ pipeline {
             }
         }
 
-        stage('Prepare EC2 Instance') {
+        stage('Prepare EC2') {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << EOF
-                        sudo apt-get update
-                        sudo apt-get install -y docker.io
-                        sudo systemctl start docker
-                        sudo systemctl enable docker
+                    sh '''
+                    echo "Attempting SSH to ${EC2_IP}..."
+                    ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${EC2_USER}@${EC2_IP} << 'EOF'
+                    echo "SSH connection successful."
+                    echo "Updating packages..."
+                    sudo apt update
+                    echo "Installing Docker..."
+                    sudo apt install -y docker.io
+                    echo "Starting Docker..."
+                    sudo systemctl start docker
+                    sudo systemctl enable docker
+                    echo "Docker setup complete."
                     EOF
-                    """
+                    '''
                 }
             }
         }
@@ -51,25 +57,29 @@ pipeline {
             steps {
                 sshagent(credentials: ["${EC2_CREDENTIAL_ID}"]) {
                     withCredentials([string(credentialsId: 'weather-api-key', variable: 'API_KEY')]) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << EOF
-                        docker pull ${DOCKER_IMAGE}:latest
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                        docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=\$(cat ~/.env | grep API_KEY | cut -d '=' -f2) ${DOCKER_IMAGE}:latest
-                    EOF
-                    """
+                        sh '''
+                        echo "Deploying to EC2 with API_KEY set..."
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
+                            echo "Pulling image..."
+                            docker pull ${DOCKER_IMAGE}:latest
+                            echo "Stopping old container..."
+                            docker stop ${CONTAINER_NAME} || true
+                            docker rm ${CONTAINER_NAME} || true
+                            echo "Running new container with API_KEY: ${API_KEY}"
+                            docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=${API_KEY} ${DOCKER_IMAGE}:latest
+                        EOF
+                        '''
                     }
                 }
             }
         }
-    }
-    post {
-        success {
-            echo '✅ Deployment successful!'
+        post {
+            success {
+                echo '✅ Deployment successful!'
+            }
+            failure {
+                echo '❌ Deployment failed. Check logs.'
+            }
         }
-        failure {
-            echo '❌ Deployment failed. Check logs.'
-        }
     }
-}
+}     
