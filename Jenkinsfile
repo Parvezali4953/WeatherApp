@@ -73,13 +73,13 @@ pipeline {
                 }
             }
         }
-        post {
-            success {
-                echo '✅ Deployment successful!'
-            }
-            failure {
-                echo '❌ Deployment failed. Check logs.'
-            }
+    }
+    post {
+        success {
+            echo '✅ Deployment successful!'
+        }
+        failure {
+            echo '❌ Deployment failed. Check logs.'
         }
     }
 }
