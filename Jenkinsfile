@@ -37,18 +37,14 @@ pipeline {
                     sh '''
                     echo "Attempting SSH to ${EC2_IP}..."
                     ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${EC2_USER}@${EC2_IP} << 'EOF'
-                        echo "SSH connection successful."
-                        echo "Checking system..."
-                        uname -a
-                        echo "Updating packages..."
-                        sudo apt update
-                        echo "Installing Docker..."
-                        sudo apt install -y docker.io || { echo "Docker install failed"; exit 1; }
-                        echo "Starting Docker..."
-                        sudo systemctl start docker
-                        sudo systemctl enable docker
-                        echo "Docker setup complete."
-                        EOF
+                    echo "SSH connection successful."
+                    uname -a
+                    sudo apt update
+                    sudo apt install -y docker.io || echo "Docker install failed"
+                    sudo systemctl start docker
+                    sudo systemctl enable docker
+                    echo "Docker setup complete."
+                    EOF
                     '''
                 }
             }
@@ -60,13 +56,13 @@ pipeline {
                         sh '''
                         echo "Deploying to EC2 with API_KEY set..."
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_IP} << 'EOF'
-                            echo "Pulling image..."
-                            docker pull ${DOCKER_IMAGE}:latest || { echo "Pull failed"; exit 1; }
-                            echo "Stopping old container..."
-                            docker stop ${CONTAINER_NAME} || true
-                            docker rm ${CONTAINER_NAME} || true
-                            echo "Running new container with API_KEY: ${API_KEY}"
-                            docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=${API_KEY} ${DOCKER_IMAGE}:latest || { echo "Run failed"; exit 1; }
+                        echo "Pulling image..."
+                        docker pull ${DOCKER_IMAGE}:latest || { echo "Pull failed"; exit 1; }
+                        echo "Stopping old container..."
+                        docker stop ${CONTAINER_NAME} || true
+                        docker rm ${CONTAINER_NAME} || true
+                        echo "Running new container with API_KEY: ${API_KEY}"
+                        docker run -d --name ${CONTAINER_NAME} -p 80:5000 -e API_KEY=${API_KEY} ${DOCKER_IMAGE}:latest || { echo "Run failed"; exit 1; }
                         EOF
                         '''
                     }
