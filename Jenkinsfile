@@ -45,7 +45,7 @@ pipeline {
                     sudo systemctl enable docker
                     echo "Docker setup complete."
                     EOF
-                    '''
+                    '''         
                 }
             }
         }
