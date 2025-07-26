@@ -1,9 +1,15 @@
 from flask import Flask, request, render_template
 import requests
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 API_KEY = os.getenv("API_KEY")
+
+if not API_KEY:
+    raise ValueError("API_KEY environment variable is not set")
 
 @app.route('/')
 def home():
@@ -22,10 +28,7 @@ def weather():
             "temperature": data["main"]["temp"],
             "description": data["weather"][0]["description"],
             "humidity": data["main"]["humidity"],
-            "wind_speed": data["wind"]["speed"],
-             
-            
-           
+            "wind_speed": data["wind"]["speed"],  
         }
         return render_template("result.html", weather=weather_data)
     else:
