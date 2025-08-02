@@ -1,0 +1,76 @@
+- name: Configure EC2 for Weather App
+  hosts: ec2
+  become: yes
+  vars:
+    server_name: "{{ ansible_host }}"
+  tasks:
+    - name: Update APT package cache
+      apt:
+        update_cache: yes
+
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: present
+
+    - name: Install Docker Compose
+      apt:
+        name: docker-compose
+        state: present
+
+    - name: Start and enable Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Reboot to apply group changes
+      reboot:
+        msg: "Rebooting to apply docker group changes"
+        reboot_timeout: 300
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Start and enable Nginx service
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Copy Nginx configuration template
+      template:
+        src: templates/nginx.conf
+        dest: /etc/nginx/sites-available/default
+        mode: '0644'
+      notify: Restart Nginx
+
+    - name: Install ufw and allow ports
+      apt:
+        name: ufw
+        state: present
+      ignore_errors: yes
+
+    - name: Allow SSH, HTTP, and Docker ports
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+      with_items:
+        - 22
+        - 80
+        - 2376
+      ignore_errors: yes
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

@@ -16,6 +16,10 @@ COPY . .
 # Set environment variables
 ENV API_KEY=$API_KEY
 
+# Create a directory for logs
+RUN mkdir -p /app/logs
+VOLUME /app/logs
+
 # Expose port (Flask default)
 EXPOSE 5000
 

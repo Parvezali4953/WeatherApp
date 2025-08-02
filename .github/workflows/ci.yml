@@ -1,0 +1,43 @@
+name: CI/CD Pipeline
+on:
+  push:
+    branches: [ main ]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install AWS CLI
+        run: |
+          curl "[invalid url, do not cite] -o "awscliv2.zip"
+          unzip awscliv2.zip
+          ./aws/install
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ap-south-1
+      - name: Get EC2 IP from SSM
+        run: |
+          EC2_IP=$(aws ssm get-parameter --name /weather/app/ec2_ip --query Parameter.Value --output text)
+          echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
+      - name: Run security scan
+        uses: github/codeql-action/analyze@v2
+        with:
+          languages: python
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t parvezali4953/flask-weather-app:latest .
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push parvezali4953/flask-weather-app:latest
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ env.EC2_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull parvezali4953/flask-weather-app:latest
+            docker-compose down 2>/dev/null || true
+            echo "API_KEY=${{ secrets.API_KEY }}" > .env
+            docker-compose up -d

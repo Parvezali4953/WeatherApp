@@ -1,0 +1,7 @@
+version: '3'
+services:
+  weather-app:
+    image: parvezali4953/flask-weather-app:latest
+    environment:
+      - API_KEY=${API_KEY}
+    restart: unless-stopped
