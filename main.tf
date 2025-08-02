@@ -49,7 +49,7 @@ resource "aws_elb" "weather_lb" {
 }
 
 resource "aws_ssm_parameter" "ec2_ip" {
-  name  = "/weather/app/ec2_ip"
+  name  = "FlaskApp-IP"
   type  = "String"
   value = aws_instance.weather_ec2.public_ip
 }
