@@ -14,7 +14,7 @@ jobs:
           aws configure set region ap-south-1
       - name: Get EC2 IP from SSM
         run: |
-          EC2_IP=$(aws ssm get-parameter --name /weather/app/ec2_ip --query Parameter.Value --output text)
+          EC2_IP=$(aws ssm get-parameter --name FlaskApp-IP --query Parameter.Value --output text)
           echo "EC2_IP=$EC2_IP" >> $GITHUB_ENV
       - name: Run security scan
         uses: github/codeql-action/analyze@v2
