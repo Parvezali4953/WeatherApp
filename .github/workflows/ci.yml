@@ -18,7 +18,7 @@ jobs:
           EC2_IP=$(aws ssm get-parameter --name FlaskApp-IP --query Parameter.Value --output text)
           echo "::set-output name=EC2_IP::$EC2_IP"
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
+        uses: github/codeql-action/init@v3
         with:
           languages: python
       - name: Install dependencies for CodeQL
@@ -26,7 +26,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt    
       - name: Run security scan
-        uses: github/codeql-action/analyze@v2
+        uses: github/codeql-action/analyze@v3
       - name: Build and Push Docker Image
         run: |
           docker build -t parvezali4953/flask-weather-app:latest .
