@@ -5,3 +5,5 @@ services:
     environment:
       - API_KEY=${API_KEY}
     restart: unless-stopped
+    volumes:
+      - /app/logs:/app/logs

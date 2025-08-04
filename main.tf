@@ -25,7 +25,7 @@ resource "aws_security_group" "weather_sg" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["192.168.1.9/32"]  # Replace with your IP
+    cidr_blocks = ["106.201.25.252/32"]  # Replace with your IP
   }
   egress {
     from_port   = 0
@@ -49,9 +49,33 @@ resource "aws_elb" "weather_lb" {
 }
 
 resource "aws_ssm_parameter" "ec2_ip" {
-  name  = "FlaskApp-IP"
+  name  = "/weather/app/ec2_ip"
   type  = "String"
   value = aws_instance.weather_ec2.public_ip
+}
+
+resource "aws_cloudwatch_log_group" "weather_logs" {
+  name              = "/weather/app/logs"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_alarm" {
+  alarm_name          = "HighCPU"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 70
+  alarm_description   = "Alarm when CPU exceeds 70% for 5 minutes"
+  dimensions = {
+    InstanceId = aws_instance.weather_ec2.id
+  }
+}
+
+resource "aws_s3_bucket" "weather_logs" {
+  bucket = "weatherapp-logs"
 }
 
 output "ec2_public_ip" {

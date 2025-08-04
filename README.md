@@ -20,12 +20,12 @@ A simple Flask app to fetch weather data using the OpenWeatherMap API, enhanced 
 - `.github/workflows/ci.yml`: GitHub Actions workflow.
 
 ## 🛠️ DevOps Pipeline
-- **CI/CD**: GitHub Actions builds Docker image and deploys to EC2.
-- **IaC**: Terraform provisions EC2 and ELB.
-- **Configuration Management**: Ansible sets up EC2 with Docker and Nginx.
-- **Monitoring**: CloudWatch monitors EC2 metrics.
-- **Storage**: CloudWatch Logs forwards logs to S3.
-- **Scalability**: ELB for load balancing (though currently with single instance).
+- **CI/CD**: GitHub Actions builds and deploys Docker image.
+- **IaC**: Terraform provisions EC2, ELB, CloudWatch, and S3.
+- **Configuration Management**: Ansible sets up EC2 with Docker, Nginx, and CloudWatch Logs.
+- **Monitoring**: CloudWatch monitors EC2 metrics and logs.
+- **Storage**: S3 stores logs via CloudWatch.
+- **Scalability**: ELB for load balancing.
 
 ## 🔐 Setup
 1. Clone: `git clone [invalid url, do not cite]
@@ -39,5 +39,5 @@ A simple Flask app to fetch weather data using the OpenWeatherMap API, enhanced 
 - Deploy with GitHub Actions: Push to main branch
 
 ## 📸 Screenshots
-- [Homepage](https://github.com/user-attachments/assets/75140d0e-4d7f-480a-9f4e-e57016e40f34)
-- [Result](https://github.com/user-attachments/assets/e6f852cd-faad-495b-8041-057b44d4425b)
+- [Homepage]([invalid url, do not cite])
+- [Result]([invalid url, do not cite])
