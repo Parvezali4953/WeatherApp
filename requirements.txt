@@ -1,4 +1,5 @@
-flask
-requests
-gunicorn==20.1.*
+Flask
 python-dotenv
+requests
+gunicorn
+boto3

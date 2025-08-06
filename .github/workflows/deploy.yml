@@ -1,0 +1,31 @@
+name: CI & Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Linting
+        run: |
+          pip install flake8
+          flake8 app/app.py
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /opt/weather-devops
+            git pull
+            API_KEY=$(aws ssm get-parameter --name "API_KEY" --with-decryption --query "Parameter.Value" --output text)
+            echo "API_KEY=$API_KEY" > .env
+            mkdir -p logs
+            docker-compose down || true
+            docker-compose up -d --build
