@@ -1,39 +1,73 @@
 provider "aws" {
-  region = "ap-south-1"
+  region = var.region
 }
 
-resource "aws_instance" "web" {
-  ami           = "ami-0f918f7e67a3323f0" # Update with the latest Amazon Linux 2 AMI ID
-  instance_type = "t2.micro"
-  key_name      = var.key_name
-  vpc_security_group_ids = [aws_security_group.allow_http.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  user_data              = file("../scripts/deploy.sh")
+resource "aws_secretsmanager_secret" "api_key" {
+  name = "weather-api-key"
+}
 
-  root_block_device {
-    volume_size = 25
-    volume_type = "gp3"
-  }
+resource "aws_secretsmanager_secret_version" "api_key_version" {
+  secret_id     = aws_secretsmanager_secret.api_key.id
+  secret_string = var.api_key
+}
 
-  tags = {
-    Name = "FlaskWeatherApp"
+resource "aws_ecr_repository" "app_repo" {
+  name = "weather-app"
+}
+
+resource "aws_ecs_cluster" "app_cluster" {
+  name = "weather-app-cluster"
+}
+
+resource "aws_ecs_task_definition" "app_task" {
+  family                   = "weather-app-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 256    # Free tier eligible
+  memory                   = 512    # Free tier eligible
+  execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+
+  container_definitions = jsonencode([{
+    name      = "weather-app",
+    image     = "${aws_ecr_repository.app_repo.repository_url}:latest",
+    essential = true,
+    portMappings = [{
+      containerPort = 5000,
+      hostPort      = 5000
+    }],
+    environment = [
+      { name = "AWS_REGION", value = var.region }
+    ]
+  }])
+}
+
+resource "aws_ecs_service" "app_service" {
+  name            = "weather-app-service"
+  cluster         = aws_ecs_cluster.app_cluster.id
+  task_definition = aws_ecs_task_definition.app_task.arn
+  launch_type     = "FARGATE"
+  desired_count   = 1  # Free tier: 1 task always running
+
+  network_configuration {
+    subnets          = [aws_default_subnet.default_subnet.id]
+    security_groups  = [aws_security_group.app_sg.id]
+    assign_public_ip = true
   }
 }
 
-resource "aws_security_group" "allow_http" {
-  name        = "allow_http"
-  description = "Allow HTTP and SSH"
+resource "aws_default_vpc" "default_vpc" {}
+
+resource "aws_default_subnet" "default_subnet" {
+  availability_zone = "${var.region}a"
+}
+
+resource "aws_security_group" "app_sg" {
+  name   = "weather-app-sg"
+  vpc_id = aws_default_vpc.default_vpc.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
+    from_port   = 5000
+    to_port     = 5000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -44,10 +78,4 @@ resource "aws_security_group" "allow_http" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-resource "aws_ssm_parameter" "api_key" {
-  name  = "API_KEY"
-  type  = "SecureString"
-  value = var.weather_api_key
 }

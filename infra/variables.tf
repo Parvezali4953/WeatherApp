@@ -1,7 +1,8 @@
-variable "key_name" {
-  type = string
+variable "region" {
+  default = "ap-south-1"
 }
 
-variable "weather_api_key" {
-  type = string
+variable "api_key" {
+  description = "OpenWeather API Key"
+  sensitive   = true
 }

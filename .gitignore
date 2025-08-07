@@ -1,50 +1,37 @@
 # Python
 __pycache__/
 *.py[cod]
-*.egg
 *.egg-info/
-dist/
-build/
-.env
-.env.*
-
-# Docker
-*.log
-*.pid
-logs/
-docker-compose.override.yml
-
-# Flask/Virtualenv
-instance/
-.venv/
+*.env
 venv/
-.env/
-*.db
+.python-version
 
 # Terraform
+**/.terraform/*
 *.tfstate
-*.tfstate.*
-.terraform/
-crash.log
-terraform.tfvars
-terraform.tfvars.json
-override.tf
-override.tf.json
+*.tfstate.backup
+*.tfvars
 
-# AWS CLI credentials (just in case)
-.aws/
+# AWS
+**/.aws/credentials
 
-# CloudWatch Agent
-amazon-cloudwatch-agent.deb
-
-# IDEs & OS
+# IDE
 .vscode/
 .idea/
+
+# Docker
+**/docker-compose.override.yml
+
+# Local files
+.env
+*.log
+*.swp
 .DS_Store
-Thumbs.db
 
-# Node/npm (in case front-end is added)
-node_modules/
+# Secrets
+**/secrets.*
+**/config.local.*
 
-# GitHub Actions temp files
-.github/workflows/*.bak
+# Virtual environment
+**/env/
+**/venv/

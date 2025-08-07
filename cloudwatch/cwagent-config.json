@@ -4,14 +4,9 @@
       "files": {
         "collect_list": [
           {
-            "file_path": "/opt/weather-devops/logs/access.log",
-            "log_group_name": "/weather-app/access",
-            "log_stream_name": "access-log"
-          },
-          {
-            "file_path": "/opt/weather-devops/logs/error.log",
-            "log_group_name": "/weather-app/error",
-            "log_stream_name": "error-log"
+            "file_path": "/var/lib/docker/containers/*/*.log",
+            "log_group_name": "weather-devops-logs",
+            "log_stream_name": "{instance_id}-app"
           }
         ]
       }
