@@ -12,7 +12,6 @@ resource "aws_iam_role" "ecs_execution_role" {
       }
     }]
   })
-
   tags = {
     Application = "weather-app"
     Environment = "production"
@@ -33,7 +32,6 @@ resource "aws_iam_role" "ecs_task_role" {
       }
     }]
   })
-
   tags = {
     Application = "weather-app"
     Environment = "production"
@@ -50,7 +48,6 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
 resource "aws_iam_role_policy" "secrets_access" {
   name   = "weather-app-secrets-access"
   role   = aws_iam_role.ecs_task_role.id
-
   policy = jsonencode({
     Version   = "2012-10-17",
     Statement = [{
@@ -69,7 +66,6 @@ resource "aws_iam_role_policy" "secrets_access" {
 # GitHub Actions Role for CI/CD
 resource "aws_iam_role" "github_actions" {
   name = "GitHubActionsRole"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -90,29 +86,17 @@ resource "aws_iam_role" "github_actions" {
       }
     ]
   })
-   tags = {
+  tags = {
     Application = "weather-app"
     Environment = "ci-cd"
   }
   description = "Role for GitHub Actions to deploy the WeatherApp to AWS"
 }
 
-# Attach policies to the GitHub Actions role
-resource "aws_iam_role_policy_attachment" "github_actions_ecs" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
-}
-# Attach ECR permissions for GitHub Actions
-resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
-  role       = aws_iam_role.github_actions.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
-}
-
 # Custom policy for GitHub Actions (more secure than full access)
 resource "aws_iam_role_policy" "github_actions_ecs" {
   name = "GitHubActionsECSPolicy"
   role = aws_iam_role.github_actions.id
-  
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [

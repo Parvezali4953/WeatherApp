@@ -8,8 +8,12 @@ output "ecs_service_name" {
   value       = aws_ecs_service.app_service.name
 }
 
-# Consider adding these useful outputs if you have the resources defined:
 output "ecs_cluster_name" {
   description = "The name of the ECS cluster"
   value       = aws_ecs_cluster.app_cluster.name
+}
+
+output "app_lb_dns_name" {
+  description = "The DNS name of the Application Load Balancer"
+  value       = aws_lb.app_lb.dns_name
 }
