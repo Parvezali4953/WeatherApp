@@ -8,6 +8,7 @@ env:
   ECR_REPO: weather-app
   ECS_CLUSTER: weather-app-cluster
   ECS_SERVICE: weather-app-service
+  AWS_REGION: ap-south-1
 
 jobs:
   deploy:
@@ -45,9 +46,48 @@ jobs:
             --force-new-deployment \
             --region ap-south-1
 
+      # Debugging steps
+      - name: Check service status
+        run: |
+          echo "=== Current Service Status ==="
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+
       - name: Verify deployment
         run: |
+          echo "=== Waiting for service stabilization ==="
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
             --service ${{ env.ECS_SERVICE }} \
-            --region ap-south-1
+            --region ${{ env.AWS_REGION }} \
+            --max-attempts 60  # Extended timeout
+          echo "=== Service is stable ==="
+
+      - name: Debug if verification fails
+        if: failure()
+        run: |
+          echo "=== Debugging Failed Deployment ==="
+          echo "Service events:"
+          aws ecs describe-services \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --query 'services[0].events' \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "Task details:"
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service-name ${{ env.ECS_SERVICE }} \
+            --query 'taskArns[0]' \
+            --output text)
+          aws ecs describe-tasks \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --tasks $TASK_ARN \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "Container logs:"
+          aws logs tail /aws/ecs/weather-app \
+            --region ${{ env.AWS_REGION }} \
+            --since 1h

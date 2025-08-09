@@ -68,39 +68,51 @@ resource "aws_iam_role_policy" "secrets_access" {
 
 # GitHub Actions Role for CI/CD
 resource "aws_iam_role" "github_actions" {
-  name        = "WeatherAppGitHubActionsRole"
-  description = "Allows GitHub Actions to deploy to ECS"
+  name = "GitHubActionsRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Principal = {
-        Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
-      },
-      Action = "sts:AssumeRoleWithWebIdentity",
-      Condition = {
-        StringEquals = {
-          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
         },
-        StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+        Action = "sts:AssumeRoleWithWebIdentity",
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          },
+          StringLike = {
+            "token.actions.githubusercontent.com:sub" = "repo:${var.github_org}/${var.github_repo}:*"
+          }
         }
       }
-    }]
+    ]
   })
-
-  tags = {
+   tags = {
     Application = "weather-app"
     Environment = "ci-cd"
   }
+  description = "Role for GitHub Actions to deploy the WeatherApp to AWS"
+}
+
+# Attach policies to the GitHub Actions role
+resource "aws_iam_role_policy_attachment" "github_actions_ecs" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
+}
+# Attach ECR permissions for GitHub Actions
+resource "aws_iam_role_policy_attachment" "github_actions_ecr" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
 }
 
 # Custom policy for GitHub Actions (more secure than full access)
 resource "aws_iam_role_policy" "github_actions_ecs" {
   name = "GitHubActionsECSPolicy"
   role = aws_iam_role.github_actions.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -154,10 +166,6 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
   })
 }
 
-# OpenID Connect Provider for GitHub Actions
-# This allows GitHub Actions to authenticate with AWS
-resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
