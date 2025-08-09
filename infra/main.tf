@@ -3,7 +3,8 @@ provider "aws" {
 }
 
 resource "aws_secretsmanager_secret" "api_key" {
-  name = "weather-api-key"
+  name        = "weather-api-key"
+  description = "OpenWeather API Key"
 }
 
 resource "aws_secretsmanager_secret_version" "api_key_version" {
@@ -12,7 +13,8 @@ resource "aws_secretsmanager_secret_version" "api_key_version" {
 }
 
 resource "aws_ecr_repository" "app_repo" {
-  name = "weather-app"
+  name                 = "weather-app"
+  image_tag_mutability = "MUTABLE"
 }
 
 resource "aws_ecs_cluster" "app_cluster" {
@@ -23,9 +25,10 @@ resource "aws_ecs_task_definition" "app_task" {
   family                   = "weather-app-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = 256    # Free tier eligible
-  memory                   = 512    # Free tier eligible
+  cpu                      = 256
+  memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn  # Critical addition
 
   container_definitions = jsonencode([{
     name      = "weather-app",
@@ -33,12 +36,25 @@ resource "aws_ecs_task_definition" "app_task" {
     essential = true,
     portMappings = [{
       containerPort = 5000,
-      hostPort      = 5000
+      hostPort      = 5000 
     }],
-    environment = [
-      { name = "AWS_REGION", value = var.region }
-    ]
+    secrets = [{
+      name      = "API_KEY",
+      valueFrom = aws_secretsmanager_secret.api_key.arn
+    }],
+    logConfiguration = {
+      logDriver = "awslogs",
+      options = {
+        "awslogs-group"         = "/ecs/weather-app",
+        "awslogs-region"        = var.region,
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
   }])
+}
+
+resource "aws_cloudwatch_log_group" "app_logs" {
+  name = "/ecs/weather-app"
 }
 
 resource "aws_ecs_service" "app_service" {
@@ -46,7 +62,7 @@ resource "aws_ecs_service" "app_service" {
   cluster         = aws_ecs_cluster.app_cluster.id
   task_definition = aws_ecs_task_definition.app_task.arn
   launch_type     = "FARGATE"
-  desired_count   = 1  # Free tier: 1 task always running
+  desired_count   = 1
 
   network_configuration {
     subnets          = [aws_default_subnet.default_subnet.id]
@@ -56,16 +72,17 @@ resource "aws_ecs_service" "app_service" {
 }
 
 resource "aws_default_vpc" "default_vpc" {}
-
 resource "aws_default_subnet" "default_subnet" {
   availability_zone = "${var.region}a"
 }
 
 resource "aws_security_group" "app_sg" {
-  name   = "weather-app-sg"
-  vpc_id = aws_default_vpc.default_vpc.id
+  name        = "weather-app-sg"
+  description = "Allow HTTP traffic"
+  vpc_id      = aws_default_vpc.default_vpc.id
 
   ingress {
+    description = "HTTP Access"
     from_port   = 5000
     to_port     = 5000
     protocol    = "tcp"

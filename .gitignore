@@ -20,18 +20,9 @@ venv/
 .idea/
 
 # Docker
-**/docker-compose.override.yml
+docker-compose.override.yml
 
 # Local files
-.env
 *.log
 *.swp
 .DS_Store
-
-# Secrets
-**/secrets.*
-**/config.local.*
-
-# Virtual environment
-**/env/
-**/venv/
