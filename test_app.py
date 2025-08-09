@@ -9,10 +9,14 @@ def client():
         yield client
 
 
-def test_health_check(client):
+def test_health_check(client, monkeypatch):
     """
     Test the /health endpoint to ensure it returns a 200 OK status.
     """
+    # Set a fake API_KEY for the duration of this test
+    monkeypatch.setenv('API_KEY', 'FAKE_API_KEY')
+
     response = client.get('/health')
     assert response.status_code == 200
     assert response.json == {"status": "healthy", "version": "1.0.0"}
+    
