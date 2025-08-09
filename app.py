@@ -2,6 +2,7 @@ from flask import Flask, request, render_template
 import requests
 import os
 
+
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
@@ -39,7 +40,10 @@ def weather():
             error="Please enter a city name."
         )
 
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric"
+    url = (
+        f"http://api.openweathermap.org/data/2.5/weather?"
+        f"q={city}&appid={API_KEY}&units=metric"
+    )
 
     try:
         response = requests.get(url)
