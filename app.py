@@ -2,24 +2,19 @@ from flask import Flask, request, render_template
 import requests
 import os
 
-
 app = Flask(__name__, template_folder='templates', static_folder='static')
-
 
 API_KEY = os.getenv('API_KEY')
 if not API_KEY:
     raise ValueError("API_KEY environment variable is required")
 
-
 @app.route('/')
 def home():
     return render_template('index.html')
 
-
 @app.route('/health')
 def health():
     return {"status": "healthy", "version": "1.0.0"}, 200
-
 
 @app.route('/weather', methods=['POST'])
 def weather():
