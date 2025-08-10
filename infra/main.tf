@@ -4,7 +4,7 @@ provider "aws" {
 
 # --- AWS Secrets Manager ---
 resource "aws_secretsmanager_secret" "api_key" {
-  name        = "weather-api-key"
+  name        = "weatherapp-api-key"
   description = "OpenWeather API Key"
 }
 

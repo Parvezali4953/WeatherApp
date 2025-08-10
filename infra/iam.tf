@@ -1,4 +1,3 @@
-# Execution Role (for ECS agent)
 resource "aws_iam_role" "ecs_execution_role" {
   name               = "weather-app-execution-role"
   description        = "Allows ECS tasks to call AWS services on your behalf"
@@ -18,7 +17,6 @@ resource "aws_iam_role" "ecs_execution_role" {
   }
 }
 
-# Task Role (for your application)
 resource "aws_iam_role" "ecs_task_role" {
   name               = "weather-app-task-role"
   description        = "Provides permissions for the weather application to access AWS resources"
@@ -38,16 +36,16 @@ resource "aws_iam_role" "ecs_task_role" {
   }
 }
 
-# Attach standard ECS policies
 resource "aws_iam_role_policy_attachment" "ecs_execution" {
   role       = aws_iam_role.ecs_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Custom secret access policy (least privilege)
-resource "aws_iam_role_policy" "secrets_access" {
-  name   = "weather-app-secrets-access"
-  role   = aws_iam_role.ecs_task_role.id
+resource "aws_iam_policy" "secrets_access" {
+  name        = "weather-app-secrets-access"
+  path        = "/"
+  description = "IAM policy for the weather application to access secrets"
+
   policy = jsonencode({
     Version   = "2012-10-17",
     Statement = [{
@@ -63,7 +61,16 @@ resource "aws_iam_role_policy" "secrets_access" {
   })
 }
 
-# GitHub Actions Role for CI/CD
+resource "aws_iam_role_policy_attachment" "ecs_task_secrets" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.secrets_access.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution_secrets" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = aws_iam_policy.secrets_access.arn
+}
+
 resource "aws_iam_role" "github_actions" {
   name = "GitHubActionsRole"
   assume_role_policy = jsonencode({
@@ -93,7 +100,6 @@ resource "aws_iam_role" "github_actions" {
   description = "Role for GitHub Actions to deploy the WeatherApp to AWS"
 }
 
-# Custom policy for GitHub Actions (more secure than full access)
 resource "aws_iam_role_policy" "github_actions_ecs" {
   name = "GitHubActionsECSPolicy"
   role = aws_iam_role.github_actions.id
