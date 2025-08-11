@@ -6,6 +6,10 @@ provider "aws" {
 resource "aws_secretsmanager_secret" "api_key" {
   name        = "weatherapp-key"
   description = "OpenWeather API Key"
+  tags = {
+    Application = "weather-app"
+    Environment = "production"
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "api_key_version" {
