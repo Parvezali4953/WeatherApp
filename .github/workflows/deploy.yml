@@ -65,7 +65,9 @@ jobs:
       - name: Build and push
         run: |
           docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }} -f Dockerfile .
+          docker tag ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
           docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
 
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
