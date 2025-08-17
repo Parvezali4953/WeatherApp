@@ -161,13 +161,15 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "arn:aws:logs:*:${var.aws_account_id}:log-group:/aws/ecs/weather-app*:*"
       },
-      # Add this new statement to allow the role to create all necessary resources.
+      # Comprehensive permissions for Terraform to create, describe, and tag resources
       {
         Effect = "Allow",
         Action = [
           "iam:CreateRole",
           "iam:CreatePolicy",
           "iam:AttachRolePolicy",
+          "iam:TagRole",
+          "iam:TagPolicy",
           "ec2:CreateVpc",
           "ec2:CreateSubnet",
           "ec2:CreateInternetGateway",
@@ -177,23 +179,27 @@ resource "aws_iam_policy" "github_actions_policy" {
           "ec2:AssociateRouteTable",
           "ec2:AllocateAddress",
           "ec2:CreateSecurityGroup",
+          "ec2:CreateTags",
           "ecr:CreateRepository",
           "ecs:CreateCluster",
           "logs:CreateLogGroup",
           "secretsmanager:CreateSecret",
+          "secretsmanager:TagResource",
           "elbv2:CreateLoadBalancer",
           "elbv2:CreateTargetGroup",
           "elbv2:CreateListener",
-          "elbv2:CreateRule"
+          "elbv2:CreateRule",
+          "elbv2:AddTags"
         ],
         Resource = "*"
       },
-      # Permissions for Terraform to read existing resources before creating new ones
+      # Permissions for Terraform to read existing resources
       {
         Effect = "Allow",
         Action = [
           "iam:ListOpenIDConnectProviders",
           "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeAddresses",
           "ecs:DescribeServices",
           "ecs:UpdateService",
           "elbv2:Describe*",
