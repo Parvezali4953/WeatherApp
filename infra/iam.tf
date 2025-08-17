@@ -161,7 +161,7 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "arn:aws:logs:*:${var.aws_account_id}:log-group:/aws/ecs/weather-app*:*"
       },
-      # Comprehensive permissions for Terraform to create, describe, and tag resources
+      # Comprehensive permissions for Terraform to create, describe, modify and tag resources
       {
         Effect = "Allow",
         Action = [
@@ -180,6 +180,7 @@ resource "aws_iam_policy" "github_actions_policy" {
           "ec2:AllocateAddress",
           "ec2:CreateSecurityGroup",
           "ec2:CreateTags",
+          "ec2:ModifyVpcAttribute", # NEW: VPC modification permission
           "ecr:CreateRepository",
           "ecs:CreateCluster",
           "logs:CreateLogGroup",
@@ -200,6 +201,7 @@ resource "aws_iam_policy" "github_actions_policy" {
           "iam:ListOpenIDConnectProviders",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeAddresses",
+          "ec2:DescribeAddressesAttribute", # NEW: Elastic IP description permission
           "ec2:DescribeVpcs",
           "ec2:DescribeSubnets",
           "ec2:DescribeInternetGateways",
