@@ -31,6 +31,16 @@ jobs:
         with:
           terraform_version: 1.0.0
 
+      - name: Create tfvars file
+        run: |
+          cat <<EOF > ./infra/terraform.tfvars
+          api_key = "${{ secrets.API_KEY }}"
+          aws_account_id = "${{ secrets.AWS_ACCOUNT_ID }}"
+          github_org = "${{ github.repository_owner }}"
+          github_repo = "${{ github.event.repository.name }}"
+          EOF
+        working-directory: ./  
+        
       - name: Terraform Init
         run: terraform init
         working-directory: ./infra
