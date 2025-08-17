@@ -161,23 +161,45 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "arn:aws:logs:*:${var.aws_account_id}:log-group:/aws/ecs/weather-app*:*"
       },
-      # Add this new statement to allow interaction with ELBv2
+      # Add this new statement to allow the role to create all necessary resources.
       {
         Effect = "Allow",
         Action = [
-          "elbv2:Describe*",
-          "elbv2:ModifyListener"
+          "iam:CreateRole",
+          "iam:CreatePolicy",
+          "iam:AttachRolePolicy",
+          "ec2:CreateVpc",
+          "ec2:CreateSubnet",
+          "ec2:CreateInternetGateway",
+          "ec2:CreateRouteTable",
+          "ec2:CreateRoute",
+          "ec2:CreateNatGateway",
+          "ec2:AssociateRouteTable",
+          "ec2:AllocateAddress",
+          "ec2:CreateSecurityGroup",
+          "ecr:CreateRepository",
+          "ecs:CreateCluster",
+          "logs:CreateLogGroup",
+          "secretsmanager:CreateSecret",
+          "elbv2:CreateLoadBalancer",
+          "elbv2:CreateTargetGroup",
+          "elbv2:CreateListener",
+          "elbv2:CreateRule"
         ],
         Resource = "*"
       },
-      # Add this statement to fix the previous AccessDenied errors
+      # Permissions for Terraform to read existing resources before creating new ones
       {
         Effect = "Allow",
         Action = [
           "iam:ListOpenIDConnectProviders",
           "ec2:DescribeAvailabilityZones",
           "ecs:DescribeServices",
-          "ecs:UpdateService"
+          "ecs:UpdateService",
+          "elbv2:Describe*",
+          "elbv2:ModifyListener",
+          "iam:GetRole",
+          "iam:ListPolicies"
         ],
         Resource = "*"
       }
