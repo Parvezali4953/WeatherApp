@@ -24,3 +24,27 @@ variable "github_repo" {
   description = "GitHub repository name (e.g., 'WeatherApp')"
   type        = string
 }
+
+variable "vpc_cidr_block" {
+  description = "The CIDR block for the custom VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "min_capacity" {
+  description = "The minimum number of tasks for autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "max_capacity" {
+  description = "The maximum number of tasks for autoscaling"
+  type        = number
+  default     = 5
+}
+
+variable "cpu_utilization_target" {
+  description = "The CPU utilization threshold for scaling"
+  type        = number
+  default     = 70
+}

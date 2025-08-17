@@ -7,12 +7,45 @@ on:
 env:
   ECR_REPO: weather-app
   ECS_CLUSTER: weather-app-cluster
-  ECS_SERVICE: weather-app-service
   AWS_REGION: ap-south-1
 
 jobs:
+  terraform-plan-and-apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.0.0
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+
+      - name: Terraform Plan
+        run: terraform plan -input=false
+        working-directory: ./infra
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+        working-directory: ./infra
+        
   lint-and-test:
     runs-on: ubuntu-latest
+    needs: [terraform-plan-and-apply]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -35,8 +68,6 @@ jobs:
       - name: Run pytest
         run: pytest
         env:
-          # A temporary, fake API key is set for the test environment.
-          # The real API key is used during the actual ECS deployment.
           API_KEY: 'fake_test_key'
 
   security-scan:
@@ -83,11 +114,17 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [lint-and-test, security-scan]
+    needs: [security-scan, lint-and-test] # Add dependencies on both jobs
     permissions:
       contents: read
       packages: write
       id-token: write
+
+    env:
+      BLUE_SERVICE: weather-app-blue-service
+      GREEN_SERVICE: weather-app-green-service
+      BLUE_TG: weather-app-blue-tg
+      GREEN_TG: weather-app-green-tg
 
     steps:
       - name: Checkout code
@@ -103,20 +140,55 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Force ECS deployment
+        with:
+          registry-type: public
+          
+      - name: Find active and inactive services
+        id: services
+        run: |
+          BLUE_COUNT=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.BLUE_SERVICE }} --region ${{ env.AWS_REGION }} --query 'services[0].runningCount')
+          GREEN_COUNT=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.GREEN_SERVICE }} --region ${{ env.AWS_REGION }} --query 'services[0].runningCount')
+          
+          if [ "$BLUE_COUNT" -gt 0 ]; then
+            echo "ACTIVE_SERVICE=${{ env.BLUE_SERVICE }}" >> $GITHUB_ENV
+            echo "INACTIVE_SERVICE=${{ env.GREEN_SERVICE }}" >> $GITHUB_ENV
+            echo "ACTIVE_TG=${{ env.BLUE_TG }}" >> $GITHUB_ENV
+            echo "INACTIVE_TG=${{ env.GREEN_TG }}" >> $GITHUB_ENV
+          else
+            echo "ACTIVE_SERVICE=${{ env.GREEN_SERVICE }}" >> $GITHUB_ENV
+            echo "INACTIVE_SERVICE=${{ env.BLUE_SERVICE }}" >> $GITHUB_ENV
+            echo "ACTIVE_TG=${{ env.GREEN_TG }}" >> $GITHUB_ENV
+            echo "INACTIVE_TG=${{ env.BLUE_TG }}" >> $GITHUB_ENV
+          fi
+          
+      - name: Deploy to inactive service
         run: |
           aws ecs update-service \
             --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
+            --service ${{ env.INACTIVE_SERVICE }} \
+            --desired-count 1 \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
-
-      - name: Verify deployment
+            
+      - name: Wait for inactive service to stabilize
         run: |
-          echo "=== Waiting for stabilization ==="
           aws ecs wait services-stable \
             --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --region ${{ env.AWS_REGION }} || \
-          echo "=== Continuing after wait timeout ==="
+            --services ${{ env.INACTIVE_SERVICE }} \
+            --region ${{ env.AWS_REGION }}
+            
+      - name: Switch traffic on ALB
+        run: |
+          LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn arn:aws:elbv2:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:loadbalancer/app/weather-app-lb/* --query 'Listeners[0].ListenerArn' --output text)
+          
+          aws elbv2 modify-listener \
+            --listener-arn "$LISTENER_ARN" \
+            --default-actions Type=forward,TargetGroupArn=arn:aws:elbv2:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:targetgroup/${{ env.INACTIVE_TG }}/*
+
+      - name: Scale down old service
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ACTIVE_SERVICE }} \
+            --desired-count 0 \
+            --region ${{ env.AWS_REGION }}

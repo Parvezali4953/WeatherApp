@@ -71,6 +71,30 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets" {
   policy_arn = aws_iam_policy.secrets_access.arn
 }
 
+resource "aws_iam_policy" "cloudwatch_metrics" {
+  name        = "weather-app-cloudwatch-metrics"
+  path        = "/"
+  description = "IAM policy to allow the application to send metrics to CloudWatch"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_task_cloudwatch" {
+  role       = aws_iam_role.ecs_task_role.name
+  policy_arn = aws_iam_policy.cloudwatch_metrics.arn
+}
+
 resource "aws_iam_role" "github_actions" {
   name = "GitHubActionsRole"
   assume_role_policy = jsonencode({
