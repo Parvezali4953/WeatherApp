@@ -193,15 +193,26 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "*"
       },
-      # Permissions for Terraform to read existing resources
+      # Permissions for Terraform to read existing resources and describe their attributes
       {
         Effect = "Allow",
         Action = [
           "iam:ListOpenIDConnectProviders",
           "ec2:DescribeAvailabilityZones",
           "ec2:DescribeAddresses",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets",
+          "ec2:DescribeInternetGateways",
+          "ec2:DescribeRouteTables",
+          "ec2:DescribeNatGateways",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeTags",
+          "ecr:DescribeRepositories",
+          "ecs:DescribeClusters",
           "ecs:DescribeServices",
           "ecs:UpdateService",
+          "logs:DescribeLogGroups",
+          "secretsmanager:DescribeSecret",
           "elbv2:Describe*",
           "elbv2:ModifyListener",
           "iam:GetRole",
