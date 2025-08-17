@@ -124,36 +124,11 @@ resource "aws_iam_role" "github_actions" {
   description = "Role for GitHub Actions to deploy the WeatherApp to AWS"
 }
 
-resource "aws_iam_role_policy" "github_actions_ecs" {
-  name = "GitHubActionsECSPolicy"
-  role = aws_iam_role.github_actions.id
+resource "aws_iam_policy" "github_actions_policy" {
+  name = "GitHubActionsPolicy"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "ecs:RegisterTaskDefinition",
-          "ecs:DeregisterTaskDefinition",
-          "ecs:ListClusters",
-          "ecs:DescribeClusters",
-          "ecs:ListTaskDefinitions",
-          "ecs:DescribeTaskDefinition",
-          "ecs:UpdateService",
-          "ecs:DescribeServices"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "iam:PassRole"
-        ],
-        Resource = [
-          aws_iam_role.ecs_execution_role.arn,
-          aws_iam_role.ecs_task_role.arn
-        ]
-      },
       {
         Effect = "Allow",
         Action = [
@@ -171,15 +146,46 @@ resource "aws_iam_role_policy" "github_actions_ecs" {
       {
         Effect = "Allow",
         Action = [
+          "iam:PassRole"
+        ],
+        Resource = [
+          aws_iam_role.ecs_execution_role.arn,
+          aws_iam_role.ecs_task_role.arn
+        ]
+      },
+      {
+        Effect = "Allow",
+        Action = [
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ],
         Resource = "arn:aws:logs:*:${var.aws_account_id}:log-group:/aws/ecs/weather-app*:*"
+      },
+      # Add this new statement to allow interaction with ELBv2
+      {
+        Effect = "Allow",
+        Action = [
+          "elbv2:Describe*",
+          "elbv2:ModifyListener"
+        ],
+        Resource = "*"
+      },
+      # Add this statement to fix the previous AccessDenied errors
+      {
+        Effect = "Allow",
+        Action = [
+          "iam:ListOpenIDConnectProviders",
+          "ec2:DescribeAvailabilityZones",
+          "ecs:DescribeServices",
+          "ecs:UpdateService"
+        ],
+        Resource = "*"
       }
     ]
   })
 }
 
-data "aws_iam_openid_connect_provider" "github" {
-  url = "https://token.actions.githubusercontent.com"
+resource "aws_iam_role_policy_attachment" "github_actions_attach" {
+  role       = aws_iam_role.github_actions.name
+  policy_arn = aws_iam_policy.github_actions_policy.arn
 }
