@@ -161,35 +161,13 @@ resource "aws_iam_policy" "github_actions_policy" {
         ],
         Resource = "arn:aws:logs:*:${var.aws_account_id}:log-group:/aws/ecs/weather-app*:*"
       },
+      # Add this new statement to allow the role to create all necessary resources.
       {
         Effect = "Allow",
         Action = [
-          "elbv2:Describe*",
-          "elbv2:ModifyListener",
-          "elbv2:DescribeTargetGroups",
-          "elbv2:DescribeListeners"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "iam:ListOpenIDConnectProviders",
-          "ec2:DescribeAvailabilityZones",
-          "ecs:DescribeServices",
-          "ecs:UpdateService"
-        ],
-        Resource = "*"
-      },
-      {
-        Effect = "Allow",
-        Action = [
-          "ecs:CreateCluster",
-          "logs:CreateLogGroup",
           "iam:CreateRole",
           "iam:CreatePolicy",
-          "secretsmanager:CreateSecret",
-          "ecr:CreateRepository",
+          "iam:AttachRolePolicy",
           "ec2:CreateVpc",
           "ec2:CreateSubnet",
           "ec2:CreateInternetGateway",
@@ -199,11 +177,29 @@ resource "aws_iam_policy" "github_actions_policy" {
           "ec2:AssociateRouteTable",
           "ec2:AllocateAddress",
           "ec2:CreateSecurityGroup",
+          "ecr:CreateRepository",
+          "ecs:CreateCluster",
+          "logs:CreateLogGroup",
+          "secretsmanager:CreateSecret",
           "elbv2:CreateLoadBalancer",
           "elbv2:CreateTargetGroup",
           "elbv2:CreateListener",
-          "elbv2:CreateRule",
-          "ecs:CreateService"
+          "elbv2:CreateRule"
+        ],
+        Resource = "*"
+      },
+      # Permissions for Terraform to read existing resources before creating new ones
+      {
+        Effect = "Allow",
+        Action = [
+          "iam:ListOpenIDConnectProviders",
+          "ec2:DescribeAvailabilityZones",
+          "ecs:DescribeServices",
+          "ecs:UpdateService",
+          "elbv2:Describe*",
+          "elbv2:ModifyListener",
+          "iam:GetRole",
+          "iam:ListPolicies"
         ],
         Resource = "*"
       }
