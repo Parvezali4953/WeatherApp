@@ -1,0 +1,12 @@
+variable "project" { type = string }
+variable "environment" { type = string }
+variable "region" { type = string }
+variable "cluster_sg_id" { type = string }
+variable "public_subnet_ids" { type = list(string) }
+variable "assign_public_ip" { type = bool }
+variable "container_port" { type = number }
+variable "desired_count" { type = number }
+variable "container_image" { type = string }
+variable "log_group_name" { type = string }
+variable "execution_role_arn" { type = string }
+variable "target_group_arn" { type = string }

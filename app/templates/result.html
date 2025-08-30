@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <body>
+    {% if error %}
+      <p style="color:red">{{ error }}</p>
+    {% elif weather %}
+      <h2>{{ weather.city }}</h2>
+      <ul>
+        <li>Temp: {{ weather.temperature }}</li>
+        <li>Description: {{ weather.description }}</li>
+        <li>Humidity: {{ weather.humidity }}</li>
+        <li>Wind: {{ weather.wind_speed }}</li>
+      </ul>
+    {% endif %}
+    <a href="/">Back</a>
+  </body>
+</html>

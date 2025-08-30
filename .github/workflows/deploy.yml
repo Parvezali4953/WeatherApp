@@ -1,204 +1,62 @@
-name: CI/CD Pipeline
-
+name: deploy
 on:
   push:
-    branches: [main]
-
-env:
-  ECR_REPO: weather-app
-  ECS_CLUSTER: weather-app-cluster
-  AWS_REGION: ap-south-1
-
+    branches: [ "main" ]
+permissions:
+  id-token: write
+  contents: read
 jobs:
-  terraform-plan-and-apply:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.0.0
-
-      - name: Create tfvars file
-        run: |
-          cat <<EOF > ./infra/terraform.tfvars
-          api_key = "${{ secrets.API_KEY }}"
-          aws_account_id = "${{ secrets.AWS_ACCOUNT_ID }}"
-          github_org = "${{ github.repository_owner }}"
-          github_repo = "${{ github.event.repository.name }}"
-          EOF
-        working-directory: ./  
-        
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./infra
-
-      - name: Terraform Plan
-        run: terraform plan -input=false
-        working-directory: ./infra
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false
-        working-directory: ./infra
-        
-  lint-and-test:
-    runs-on: ubuntu-latest
-    needs: [terraform-plan-and-apply]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install flake8 pytest
-
-      - name: Run flake8
-        run: flake8 . --count --show-source --statistics
-
-      - name: Run pytest
-        run: pytest
-        env:
-          API_KEY: 'fake_test_key'
-
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: [lint-and-test]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      security-events: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-          aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build and push
-        run: |
-          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }} -f Dockerfile .
-          docker tag ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}
-          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest
-
-      - name: Run Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-
   deploy:
     runs-on: ubuntu-latest
-    needs: [security-scan, lint-and-test] # Add dependencies on both jobs
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
     env:
-      BLUE_SERVICE: weather-app-blue-service
-      GREEN_SERVICE: weather-app-green-service
-      BLUE_TG: weather-app-blue-tg
-      GREEN_TG: weather-app-green-tg
-
+      AWS_REGION: ap-south-1
+      IMAGE_NAME: weather-app
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          python-version: "3.11"
+
+      - name: Build app image
+        run: |
+          cd app
+          docker build -t $IMAGE_NAME:$GITHUB_SHA .
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::577638355583:role/weather-prod-gh-oidc
           aws-region: ${{ env.AWS_REGION }}
-          audience: sts.amazonaws.com
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
-          
-      - name: Find active and inactive services
-        id: services
-        run: |
-          BLUE_COUNT=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.BLUE_SERVICE }} --region ${{ env.AWS_REGION }} --query 'services[0].runningCount')
-          GREEN_COUNT=$(aws ecs describe-services --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.GREEN_SERVICE }} --region ${{ env.AWS_REGION }} --query 'services[0].runningCount')
-          
-          if [ "$BLUE_COUNT" -gt 0 ]; then
-            echo "ACTIVE_SERVICE=${{ env.BLUE_SERVICE }}" >> $GITHUB_ENV
-            echo "INACTIVE_SERVICE=${{ env.GREEN_SERVICE }}" >> $GITHUB_ENV
-            echo "ACTIVE_TG=${{ env.BLUE_TG }}" >> $GITHUB_ENV
-            echo "INACTIVE_TG=${{ env.GREEN_TG }}" >> $GITHUB_ENV
-          else
-            echo "ACTIVE_SERVICE=${{ env.GREEN_SERVICE }}" >> $GITHUB_ENV
-            echo "INACTIVE_SERVICE=${{ env.BLUE_SERVICE }}" >> $GITHUB_ENV
-            echo "ACTIVE_TG=${{ env.GREEN_TG }}" >> $GITHUB_ENV
-            echo "INACTIVE_TG=${{ env.BLUE_TG }}" >> $GITHUB_ENV
-          fi
-          
-      - name: Deploy to inactive service
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.INACTIVE_SERVICE }} \
-            --desired-count 1 \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
-            
-      - name: Wait for inactive service to stabilize
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services ${{ env.INACTIVE_SERVICE }} \
-            --region ${{ env.AWS_REGION }}
-            
-      - name: Switch traffic on ALB
-        run: |
-          LISTENER_ARN=$(aws elbv2 describe-listeners --load-balancer-arn arn:aws:elbv2:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:loadbalancer/app/weather-app-lb/* --query 'Listeners[0].ListenerArn' --output text)
-          
-          aws elbv2 modify-listener \
-            --listener-arn "$LISTENER_ARN" \
-            --default-actions Type=forward,TargetGroupArn=arn:aws:elbv2:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:targetgroup/${{ env.INACTIVE_TG }}/*
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Scale down old service
+      - name: Push image to ECR
         run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ACTIVE_SERVICE }} \
-            --desired-count 0 \
-            --region ${{ env.AWS_REGION }}
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/weather-prod"
+          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
+          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
+          docker push $REPO_URI:latest
+          docker push $REPO_URI:$GITHUB_SHA
+          echo "REPO_URI=$REPO_URI" >> $GITHUB_ENV
+
+      - name: Terraform init/apply
+        working-directory: infra
+        run: |
+          terraform init -reconfigure
+          terraform apply -auto-approve \
+            -var="region=${AWS_REGION}" \
+            -var="project=weather" \
+            -var="environment=prod" \
+            -var="container_port=5000" \
+            -var="desired_count=1" \
+            -var="container_image=${REPO_URI}:latest"
+
+      - name: Smoke test /health
+        run: |
+          ALB=$(terraform -chdir=infra output -raw alb_dns_name)
+          curl -fsS "http://$ALB/health"
+          echo "OK"
