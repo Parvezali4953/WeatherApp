@@ -1,3 +1,11 @@
+module "secrets" {
+  source      = "./secrets"
+  project     = var.project
+  environment = var.environment
+  region      = var.region
+  api_key     = var.api_key
+}
+
 module "networking" {
   source      = "./networking"
   project     = var.project
@@ -22,6 +30,8 @@ module "iam" {
   source      = "./iam"
   project     = var.project
   environment = var.environment
+   # Pass secret ARN so exec role can read it
+  weather_api_secret_arn   = module.secrets.weather_api_arn
 }
 
 module "alb" {
@@ -48,5 +58,7 @@ module "ecs" {
   log_group_name     = module.cloudwatch.log_group_name
   execution_role_arn = module.iam.execution_role_arn
   target_group_arn   = module.alb.target_group_arn
+  # Pass secret ARN to task definition
+  weather_api_secret_arn = module.secrets.weather_api_arn
   depends_on         = [module.alb]
 }

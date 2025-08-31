@@ -4,3 +4,9 @@ variable "environment"    { type = string }
 variable "container_port" { type = number }
 variable "desired_count"  { type = number }
 variable "container_image"{ type = string }
+
+variable "api_key" {
+  type        = string
+  description = "Weather API key to store in Secrets Manager"
+  sensitive   = true
+}

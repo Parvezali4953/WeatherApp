@@ -22,8 +22,11 @@ resource "aws_ecs_task_definition" "this" {
           awslogs-stream-prefix = "ecs"
         }
       }
-      environment = [
-        { name = "API_KEY", value = "" }
+      secrets = [
+        {
+          name      = "API_KEY"
+          valueFrom = var.weather_api_secret_arn
+        }
       ]
     }
   ])
