@@ -44,7 +44,10 @@ jobs:
           docker push $REPO_URI:latest
           docker push $REPO_URI:$GITHUB_SHA
           echo "REPO_URI=$REPO_URI" >> $GITHUB_ENV
-
+          
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        
       - name: Terraform init/apply
         working-directory: infra
         run: |
