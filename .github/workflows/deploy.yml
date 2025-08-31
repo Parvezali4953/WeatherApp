@@ -2,9 +2,10 @@ name: deploy
 on:
   push:
     branches: [ "main" ]
+
 permissions:
-  id-token: write
   contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,21 +24,12 @@ jobs:
         run: |
           cd app
           docker build -t $IMAGE_NAME:$GITHUB_SHA .
-      - name: Debug OIDC token claims
-        run: |
-          echo "Event: ${{ github.event_name }}"
-          echo "Ref:   ${{ github.ref }}"
-          echo "Repo:  ${{ github.repository }}"
-          echo "Actor: ${{ github.actor }}"
-          
-          # Request OIDC token and print claims
-          OIDC_TOKEN=$(curl -sLS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$OIDC_TOKEN" | awk -F. '{print $2}' | base64 -d 2>/dev/null | jq .
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials (keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::577638355583:role/weather-prod-gh-oidc
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
