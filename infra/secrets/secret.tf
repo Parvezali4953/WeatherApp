@@ -1,5 +1,5 @@
 resource "aws_secretsmanager_secret" "weather_api" {
-  name        = "${var.project}/${var.environment}/weather_api"
+  name        = "${var.project}/${var.environment}/weather_apikey"
   description = "API key for Weather app"
   tags = {
     Project     = var.project
