@@ -50,6 +50,8 @@ jobs:
         
       - name: Terraform init/apply
         working-directory: infra
+        env:
+          TF_VAR_api_key: ${{ secrets.WEATHER_API_KEY }}
         run: |
           terraform init -reconfigure
           terraform apply -auto-approve \
