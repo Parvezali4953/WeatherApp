@@ -63,27 +63,40 @@ jobs:
         id: ecs_deploy
         run: |
 
+          # 1. Retrieve essential Terraform Outputs
           CLUSTER_NAME=$(terraform -chdir=infra output -raw ecs_cluster_name)
           SERVICE_NAME=$(terraform -chdir=infra output -raw ecs_service_name)
           
-          # 1. Get current Task Definition JSON
+          # Get the ARN of the currently running Task Definition
           TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
-          
-          # 2. Register a NEW Revision with the updated image URI
-          # jq is used to modify the image path dynamically
-          NEW_TASK_DEF=$(
-            aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json |
-            jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' |
-            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities)' |
-            aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text
-          )
 
-          # 3. Force Service Deployment (Triggers the new rollout)
+          # --- FIX: Use temporary file for clean JSON passing ---
+          
+          # 2. Get the current Task Definition JSON and save it to a temp file
+          aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json > task-def-base.json
+          
+          # 3. Modify the JSON: Update the image and remove ARN/Revision fields
+          jq --arg IMAGE_URI "$IMAGE_URI" \
+            '.containerDefinitions[0].image = $IMAGE_URI | del(.taskDefinitionArn, .revision, .status, .compatibilities)' \
+            task-def-base.json > new-task-definition.json
+          
+          # 4. Register the new definition from the clean file and capture the ARN
+          NEW_TASK_DEF=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          
+          echo "Registered new Task Definition: $NEW_TASK_DEF"
+
+          # 5. Force Service Deployment
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
             --task-definition $NEW_TASK_DEF \
             --force-new-deployment
+            
+          # 6. Wait for the new deployment to stabilize
+          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
 
       # 6. Smoke Test
       - name: Smoke test /health
