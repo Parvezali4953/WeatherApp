@@ -39,45 +39,43 @@ jobs:
           
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
           
-          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
           docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
-          docker push $REPO_URI:latest
+          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
+          
           docker push $REPO_URI:$GITHUB_SHA
-
-
+          docker push $REPO_URI:latest
+          
           echo "IMAGE_URI=$REPO_URI:$GITHUB_SHA" >> $GITHUB_ENV
+          
+      # 4. Terraform Init and Apply (This step confirms your infrastructure is ready)
+      - name: Terraform Init and Apply
+        run: |
+          terraform -chdir=infra init
+          terraform -chdir=infra apply -auto-approve
 
-      # 4. Terraform Setup (Only for reading Outputs)
-      - name: Setup Terraform & Init (Read Outputs)
-        uses: hashicorp/setup-terraform@v3
-        
-      - name: Terraform Init
-        working-directory: infra
-        run: terraform init -reconfigure # Required to sync with S3 remote state
-      
-      - name: Debug IMAGE_URI
-        run: echo "IMAGE_URI='$IMAGE_URI'"
-
-      # 5. FAST ECS Deployment using AWS CLI (Replaced terraform apply)
-      - name: Update ECS Service with new image (Fast Deployment)
+      # 5. Deploy new Task Definition and update ECS Service
+      # This step is the source of the JSON error. We are making it robust.
+      - name: Deploy new Task Definition and update ECS Service
         id: ecs_deploy
         run: |
-
           # 1. Retrieve essential Terraform Outputs
           CLUSTER_NAME=$(terraform -chdir=infra output -raw ecs_cluster_name)
           SERVICE_NAME=$(terraform -chdir=infra output -raw ecs_service_name)
+          IMAGE_URI="$IMAGE_URI" # Get the ECR URI from the environment variables
           
           # Get the ARN of the currently running Task Definition
           TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
+          echo "Current Task Definition ARN: $TASK_DEF_ARN"
 
           # --- FIX: Use temporary file for clean JSON passing ---
           
           # 2. Get the current Task Definition JSON and save it to a temp file
           aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json > task-def-base.json
           
-          # 3. Modify the JSON: Update the image and remove ARN/Revision fields
+          # 3. CRITICAL JQ FIX: Modify the JSON. 
+          # Update the image, and aggressively remove ALL rejected metadata fields (like .requiresAttributes, .registeredAt, .registeredBy)
           jq --arg IMAGE_URI "$IMAGE_URI" \
-            '.containerDefinitions[0].image = $IMAGE_URI | del(.taskDefinitionArn, .revision, .status, .compatibilities)' \
+            '.containerDefinitions[0].image = $IMAGE_URI | del(.taskDefinitionArn, .revision, .status, .compatibilities, .requiresAttributes, .registeredAt, .registeredBy, .version, .arn)' \
             task-def-base.json > new-task-definition.json
           
           # 4. Register the new definition from the clean file and capture the ARN
@@ -95,7 +93,7 @@ jobs:
             --task-definition $NEW_TASK_DEF \
             --force-new-deployment
             
-          # 6. Wait for the new deployment to stabilize
+          # 6. Wait for the new deployment to stabilize (Ensures pipeline doesn't exit early)
           aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
 
       # 6. Smoke Test
@@ -103,4 +101,4 @@ jobs:
         run: |
           ALB_DNS=$(terraform -chdir=infra output -raw alb_dns_name)
           curl -fsS "http://$ALB_DNS/health"
-          echo "Deployment verified. OK."
+          echo "Deployment successful! Application available at: http://$ALB_DNS"
