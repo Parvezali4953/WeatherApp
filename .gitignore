@@ -1,19 +1,40 @@
-# Python
-__pycache__/
+# Python / Flask Application Files
+pycache/
 *.py[cod]
 *.egg-info/
 *.env
 venv/
 .python-version
+app/.pytest_cache/
+app/.coverage
 
-# Terraform
-**/.terraform/*
+# --- Terraform and Infrastructure Files ---
+IGNORE all local temporary directories, state, and plan files.
+state/
+infra/.terraform/
+infra/ecs/.terraform/
+
+# Terraform CLI files (always ignore these)
+Ignore the actual local state files and backups
 *.tfstate
 *.tfstate.backup
-*.tfvars
 
-# AWS
+# Ignore all generated plan files
+*.tfplan
+.tfplan.
+
+# Ignore variables that might contain secrets or environment-specific values
+*.tfvars
+*.tfvars.json
+
+# IMPORTANT: .terraform.lock.hcl is used to track provider versions and should not be ignored
+# so we do not include it in the ignore list.
+
+# --- Security and Local Configuration ---
+DO NOT commit AWS credentials or local tokens
 **/.aws/credentials
+**/.aws/config
+**/.env.local
 
 # IDE
 .vscode/
