@@ -7,24 +7,23 @@ permissions:
   contents: read
 
 jobs:
+  # NOTE: For production, this job should have a 'needs: test' dependency on ci.yml
   deploy:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ap-south-1
       IMAGE_NAME: weather-app
+      ECR_REPO: weather-prod 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
+      
+       # 1. Build app image
       - name: Build app image
         run: |
           cd app
           docker build -t $IMAGE_NAME:$GITHUB_SHA .
 
+      # 2. Configure AWS credentials
       - name: Configure AWS credentials (keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -32,38 +31,63 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Push image to ECR
+      # 3. ECR Login/Push
+      - name: Login to ECR and Push image
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/weather-prod"
+          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ env.ECR_REPO }}"
+          
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
+          
           docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
           docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
           docker push $REPO_URI:latest
           docker push $REPO_URI:$GITHUB_SHA
-          echo "REPO_URI=$REPO_URI" >> $GITHUB_ENV
-          
-      - name: Setup Terraform
+
+
+          echo "IMAGE_URI=$REPO_URI:$GITHUB_SHA" >> $GITHUB_ENV
+
+      # 4. Terraform Setup (Only for reading Outputs)
+      - name: Setup Terraform & Init (Read Outputs)
         uses: hashicorp/setup-terraform@v3
         
-      - name: Terraform init/apply
+      - name: Terraform Init
         working-directory: infra
-        env:
-          TF_VAR_api_key: ${{ secrets.WEATHER_API_KEY }}
-        run: |
-          terraform init -reconfigure
-          terraform apply -auto-approve \
-            -var="region=${AWS_REGION}" \
-            -var="project=weather" \
-            -var="environment=prod" \
-            -var="container_port=5000" \
-            -var="desired_count=1" \
-            -var="container_image=${REPO_URI}:latest"
+        run: terraform init -reconfigure # Required to sync with S3 remote state
+      
+      - name: Debug IMAGE_URI
+        run: echo "IMAGE_URI='$IMAGE_URI'"
 
+      # 5. FAST ECS Deployment using AWS CLI (Replaced terraform apply)
+      - name: Update ECS Service with new image (Fast Deployment)
+        id: ecs_deploy
+        run: |
+
+          CLUSTER_NAME=$(terraform -chdir=infra output -raw ecs_cluster_name)
+          SERVICE_NAME=$(terraform -chdir=infra output -raw ecs_service_name)
+          
+          # 1. Get current Task Definition JSON
+          TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
+          
+          # 2. Register a NEW Revision with the updated image URI
+          # jq is used to modify the image path dynamically
+          NEW_TASK_DEF=$(
+            aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json |
+            jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' |
+            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities)' |
+            aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text
+          )
+
+          # 3. Force Service Deployment (Triggers the new rollout)
+          aws ecs update-service \
+            --cluster $CLUSTER_NAME \
+            --service $SERVICE_NAME \
+            --task-definition $NEW_TASK_DEF \
+            --force-new-deployment
+
+      # 6. Smoke Test
       - name: Smoke test /health
         run: |
-          ALB=$(terraform -chdir=infra output -raw alb_dns_name)
-          curl -fsS "http://$ALB/health"
-          echo "OK"
+          ALB_DNS=$(terraform -chdir=infra output -raw alb_dns_name)
+          curl -fsS "http://$ALB_DNS/health"
+          echo "Deployment verified. OK."

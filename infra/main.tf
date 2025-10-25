@@ -50,15 +50,15 @@ module "ecs" {
   environment        = var.environment
   region             = var.region
   cluster_sg_id      = module.networking.app_sg_id
-  public_subnet_ids  = module.networking.public_subnet_ids
-  assign_public_ip   = true
+  public_subnet_ids  = module.networking.public_subnet_ids # Needed for ALB Target registration
+  private_subnet_ids = module.networking.private_subnet_ids # <<< CHANGED: Using Private Subnets
+  # assign_public_ip   = false                                # Ensure tasks do not get public IPs in private subnets
   container_port     = var.container_port
   desired_count      = var.desired_count
   container_image    = var.container_image
   log_group_name     = module.cloudwatch.log_group_name
   execution_role_arn = module.iam.execution_role_arn
+  task_role_arn      = module.iam.task_role_arn           # <<< NEW: Passing the Task Role ARN
   target_group_arn   = module.alb.target_group_arn
-  # Pass secret ARN to task definition
   weather_api_secret_arn = module.secrets.weather_api_arn
-  depends_on         = [module.alb]
 }

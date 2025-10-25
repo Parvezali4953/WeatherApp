@@ -6,7 +6,12 @@ resource "aws_ecs_task_definition" "this" {
   memory                   = "512"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  execution_role_arn       = var.execution_role_arn
+  
+  # Execution Role: Only for ECR pull and CloudWatch logs.
+  execution_role_arn       = var.execution_role_arn 
+  
+  # CRITICAL: New Task Role. Only for reading Secrets Manager (App's actual permissions).
+  task_role_arn            = var.task_role_arn 
 
   container_definitions = jsonencode([
     {
@@ -22,6 +27,7 @@ resource "aws_ecs_task_definition" "this" {
           awslogs-stream-prefix = "ecs"
         }
       }
+      # Secrets are read using the dedicated Task Role (task_role_arn)
       secrets = [
         {
           name      = "API_KEY"
