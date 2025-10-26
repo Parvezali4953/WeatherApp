@@ -70,21 +70,18 @@ jobs:
           TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
           
           # 2. Extract, Update Image URI, and Register a NEW Task Definition Revision
-          # This complex sequence uses 'jq' to perform JSON manipulation:
-          # A. Get the current Task Definition JSON (query 'taskDefinition')
-          # B. Update the container's image URI with the new SHA tag
-          # C. Remove metadata fields that would prevent the 'register-task-definition' command from working
           NEW_TASK_DEF_ARN=$(
             aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json | \
             jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' | \
-            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities, .requiresAttributes)' | \
+            # SYNTAX FIX: Remove ALL administrative fields that prevent registration.
+            # This is the most comprehensive list to ensure valid JSON input.
+            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities, .requiresAttributes, .registeredAt, .deregisteredAt, .placementConstraints, .ephemeralStorage)' | \
             aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text
           )
           
           echo "Registered new Task Definition: $NEW_TASK_DEF_ARN"
           
           # 3. Update the ECS Service to use the NEW Task Definition
-          # The '--force-new-deployment' flag is critical; it immediately triggers the quick rollout.
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
