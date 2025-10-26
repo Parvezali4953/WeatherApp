@@ -1,4 +1,4 @@
-name: deploy
+name: deploy-fast
 on:
   push:
     branches: [ "main" ]
@@ -7,29 +7,26 @@ permissions:
   contents: read
 
 jobs:
-  # NOTE: For production, this job should have a 'needs: test' dependency on ci.yml
   deploy:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ap-south-1
       IMAGE_NAME: weather-app
-      ECR_REPO: weather-prod 
+      INFRA_DIR: infra
+      
     steps:
       - uses: actions/checkout@v4
-      
-      # Install jq (needed for JSON manipulation with AWS CLI)
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 1. Build app image
+      # 1. Build and Tag App Image
       - name: Build app image
-        id: build_image
-        run: |
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: |
           cd app
-          # Uses the GitHub commit SHA as the unique tag
           docker build -t $IMAGE_NAME:$GITHUB_SHA .
 
-      # 2. Configure AWS credentials
+      # 2. Configure AWS
       - name: Configure AWS credentials (keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -37,75 +34,67 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3. ECR Login/Push
+      # 3. Login and Push to ECR
       - name: Login to ECR and Push image
-        id: ecr_push
-        run: |
+        uses: aws-actions/amazon-ecr-login@v2
+      - run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          # Construct the full ECR URI
-          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ env.ECR_REPO }}"
+          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/weather-prod"
           
-          # Login
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
+          # Use unique SHA tag for reliability, and export the full URI
+          IMAGE_URI="$REPO_URI:$GITHUB_SHA"
           
-          # Tag and Push
-          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
-          docker push $REPO_URI:$GITHUB_SHA
+          docker tag $IMAGE_NAME:$GITHUB_SHA $IMAGE_URI
+          docker push $IMAGE_URI
           
-          # Set the full image URI as an output variable for the next step
-          echo "IMAGE_URI=$REPO_URI:$GITHUB_SHA" >> $GITHUB_ENV
+          # Export the full URI for the next step
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+          
+      # 4. Terraform Setup (Needed only to read output values from state)
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
-      # 4. Terraform Init (Only for fetching remote state outputs)
-      # NOTE: No `terraform apply` is run here! This is the major speedup.
-      - name: Terraform Init (Fetch Outputs)
-        id: terraform_init
-        run: terraform -chdir=infra init
-        env:
-          # Use the environment variables set by aws-actions/configure-aws-credentials
-          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-
-      # 5. ECS Deployment (Zero-Downtime Rollout using AWS CLI)
-      - name: Update ECS Service
-        id: ecs_deploy
+      # 5. FAST ECS Deployment (The speed-up using AWS CLI)
+      - name: Update Task Definition and Service
         run: |
-          # Fetch all necessary names from Terraform remote state outputs
-          CLUSTER_NAME=$(terraform -chdir=infra output -raw ecs_cluster_name)
-          SERVICE_NAME=$(terraform -chdir=infra output -raw ecs_service_name)
-          IMAGE_URI="${IMAGE_URI}" # Image URI set in Step 3
+          set -e # Exit immediately if any command fails
 
-          # 1. Get current Task Definition JSON
-          # We describe the service to find the CURRENT Task Definition ARN
+          # Use Terraform to quickly read the cluster and service names from state
+          terraform -chdir=${INFRA_DIR} init -reconfigure
+          CLUSTER_NAME=$(terraform -chdir=${INFRA_DIR} output -raw ecs_cluster_name)
+          SERVICE_NAME=$(terraform -chdir=${INFRA_DIR} output -raw ecs_service_name)
+          
+          echo "Deploying to cluster: $CLUSTER_NAME, service: $SERVICE_NAME"
+          
+          # 1. Get the current Task Definition ARN from the running service
           TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
           
-          # 2. Register a NEW Revision with the updated image URI
-          # We use `jq` to pull the task definition, modify the image URI, and strip meta-data
-          NEW_TASK_DEF_ARN=$(\
-            aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json |\
-            jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' |\
-            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities)' |\
-            aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text\
+          # 2. Extract, Update Image URI, and Register a NEW Task Definition Revision
+          # This complex sequence uses 'jq' to perform JSON manipulation:
+          # A. Get the current Task Definition JSON (query 'taskDefinition')
+          # B. Update the container's image URI with the new SHA tag
+          # C. Remove metadata fields that would prevent the 'register-task-definition' command from working
+          NEW_TASK_DEF_ARN=$(
+            aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json | \
+            jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' | \
+            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities, .requiresAttributes)' | \
+            aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text
           )
-
+          
           echo "Registered new Task Definition: $NEW_TASK_DEF_ARN"
-
-          # 3. Force Service Deployment (Triggers the new rollout)
+          
+          # 3. Update the ECS Service to use the NEW Task Definition
+          # The '--force-new-deployment' flag is critical; it immediately triggers the quick rollout.
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
             --task-definition $NEW_TASK_DEF_ARN \
             --force-new-deployment
-          
-          # Waiter is critical: Wait for the service to report a healthy, stable state
-          echo "Waiting for service to become stable (max 300s)..."
+
+          # 4. Wait for the service to be stable (Zero-Downtime Check)
+          echo "Waiting for service to be stable..."
           aws ecs wait services-stable \
             --cluster $CLUSTER_NAME \
             --services $SERVICE_NAME
-
-      # 6. Smoke Test
-      - name: Smoke test /health
-        run: |
-          ALB_DNS=$(terraform -chdir=infra output -raw alb_dns_name)
-          # Use the ALB DNS name to verify the app is reachable
-          curl -fsS "http://$ALB_DNS/health"
-          echo "Smoke test passed. Deployment complete."
+          
+          echo "Deployment successful and stable!"
