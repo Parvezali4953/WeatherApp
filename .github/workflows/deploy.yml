@@ -17,19 +17,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # 1. NEW STEP: Install Terraform CLI
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0 # You can adjust this version if needed
-          
-       # 2. Build app image
+      # Install jq (needed for JSON manipulation with AWS CLI)
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 1. Build app image
       - name: Build app image
+        id: build_image
         run: |
           cd app
+          # Uses the GitHub commit SHA as the unique tag
           docker build -t $IMAGE_NAME:$GITHUB_SHA .
 
-      # 3. Configure AWS credentials
+      # 2. Configure AWS credentials
       - name: Configure AWS credentials (keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -37,72 +37,75 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 4. ECR Login/Push
+      # 3. ECR Login/Push
       - name: Login to ECR and Push image
+        id: ecr_push
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          # Construct the full ECR URI
           REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/${{ env.ECR_REPO }}"
           
+          # Login
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI
           
+          # Tag and Push
           docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
-          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
-          
           docker push $REPO_URI:$GITHUB_SHA
-          docker push $REPO_URI:latest
           
+          # Set the full image URI as an output variable for the next step
           echo "IMAGE_URI=$REPO_URI:$GITHUB_SHA" >> $GITHUB_ENV
-          
-      # 5. Terraform Init and Apply (This step confirms your infrastructure is ready)
-      # This will now succeed because Terraform is installed.
-      - name: Terraform Init and Apply
-        run: |
-          terraform -chdir=infra init
-          terraform -chdir=infra apply -auto-approve
 
-      # 6. Deploy new Task Definition and update ECS Service
-      - name: Deploy new Task Definition and update ECS Service
+      # 4. Terraform Init (Only for fetching remote state outputs)
+      # NOTE: No `terraform apply` is run here! This is the major speedup.
+      - name: Terraform Init (Fetch Outputs)
+        id: terraform_init
+        run: terraform -chdir=infra init
+        env:
+          # Use the environment variables set by aws-actions/configure-aws-credentials
+          AWS_ACCESS_KEY_ID: ${{ env.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
+
+      # 5. ECS Deployment (Zero-Downtime Rollout using AWS CLI)
+      - name: Update ECS Service
         id: ecs_deploy
         run: |
-          # 1. Retrieve essential Terraform Outputs
+          # Fetch all necessary names from Terraform remote state outputs
           CLUSTER_NAME=$(terraform -chdir=infra output -raw ecs_cluster_name)
           SERVICE_NAME=$(terraform -chdir=infra output -raw ecs_service_name)
-          IMAGE_URI="$IMAGE_URI"
-          
-          # Get the ARN of the currently running Task Definition
+          IMAGE_URI="${IMAGE_URI}" # Image URI set in Step 3
+
+          # 1. Get current Task Definition JSON
+          # We describe the service to find the CURRENT Task Definition ARN
           TASK_DEF_ARN=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query "services[0].taskDefinition" --output text)
-          echo "Current Task Definition ARN: $TASK_DEF_ARN"
+          
+          # 2. Register a NEW Revision with the updated image URI
+          # We use `jq` to pull the task definition, modify the image URI, and strip meta-data
+          NEW_TASK_DEF_ARN=$(\
+            aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json |\
+            jq --arg IMAGE_URI "$IMAGE_URI" '.containerDefinitions[0].image = $IMAGE_URI' |\
+            jq 'del(.taskDefinitionArn, .revision, .status, .compatibilities)' |\
+            aws ecs register-task-definition --cli-input-json file:///dev/stdin --query 'taskDefinition.taskDefinitionArn' --output text\
+          )
 
-          # 2. Get the current Task Definition JSON and save it to a temp file
-          aws ecs describe-task-definition --task-definition $TASK_DEF_ARN --query 'taskDefinition' --output json > task-def-base.json
-          
-          # 3. CRITICAL JQ FIX: Modify the JSON. 
-          # Update the image, and aggressively remove ALL rejected metadata fields
-          jq --arg IMAGE_URI "$IMAGE_URI" \
-            '.containerDefinitions[0].image = $IMAGE_URI | del(.taskDefinitionArn, .revision, .status, .compatibilities, .requiresAttributes, .registeredAt, .registeredBy, .version, .arn)' \
-            task-def-base.json > new-task-definition.json
-          
-          # 4. Register the new definition from the clean file and capture the ARN
-          NEW_TASK_DEF=$(aws ecs register-task-definition \
-            --cli-input-json file://new-task-definition.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          
-          echo "Registered new Task Definition: $NEW_TASK_DEF"
+          echo "Registered new Task Definition: $NEW_TASK_DEF_ARN"
 
-          # 5. Force Service Deployment
+          # 3. Force Service Deployment (Triggers the new rollout)
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
-            --task-definition $NEW_TASK_DEF \
+            --task-definition $NEW_TASK_DEF_ARN \
             --force-new-deployment
-            
-          # 6. Wait for the new deployment to stabilize
-          aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
+          
+          # Waiter is critical: Wait for the service to report a healthy, stable state
+          echo "Waiting for service to become stable (max 300s)..."
+          aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $SERVICE_NAME
 
-      # 7. Smoke Test
+      # 6. Smoke Test
       - name: Smoke test /health
         run: |
           ALB_DNS=$(terraform -chdir=infra output -raw alb_dns_name)
+          # Use the ALB DNS name to verify the app is reachable
           curl -fsS "http://$ALB_DNS/health"
-          echo "Deployment successful! Application available at: http://$ALB_DNS"
+          echo "Smoke test passed. Deployment complete."
