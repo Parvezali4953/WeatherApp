@@ -13,11 +13,12 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      AWS_REGION:       "ap-south-1"
-      ECR_REPOSITORY:   "weather-app-prod"
-      ECS_CLUSTER_NAME: "weather-app-prod-cluster"
-      ECS_SERVICE_NAME: "weather-app-prod-service"
-      CONTAINER_NAME:   "weather-app-container"
+      AWS_REGION:                 "ap-south-1"
+      ECR_REPOSITORY:             "weather-app-prod"
+      ECS_CLUSTER_NAME:           "weather-app-prod-cluster"
+      ECS_SERVICE_NAME:           "weather-app-prod-service"
+      CONTAINER_NAME:             "weather-app-container"
+      ECS_TASK_DEFINITION_FAMILY: "weather-app-prod-task"
 
     steps:
       - name: Checkout code
@@ -46,7 +47,7 @@ jobs:
 
       - name: Download latest task definition
         run: |
-          aws ecs describe-task-definition --task-definition ${{ env.ECS_SERVICE_NAME }} --query taskDefinition > task-definition.json
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION_FAMILY }} --query taskDefinition > task-definition.json
 
       - name: Update image in task definition
         id: task-def
