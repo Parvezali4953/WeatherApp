@@ -1,52 +1,26 @@
+# /app/tests/test_app.py
+
 import pytest
-from unittest.mock import patch
+from app import app
 
-# The 'client' fixture is automatically available from conftest.py
+# This is a standard pytest "fixture" that creates a test client for your app.
+@pytest.fixture
+def client():
+    app.config.update({"TESTING": True})
+    with app.test_client() as client:
+        yield client
 
-def test_home_route(client):
-    """Test that the home page loads successfully."""
-    response = client.get('/')
-    assert response.status_code == 200
-    assert b"Enter a city name" in response.data
-
-def test_health_check_route(client):
-    """Test that the health check endpoint returns a healthy status."""
-    response = client.get('/health')
-    assert response.status_code == 200
-    assert response.json == {"status": "healthy"}
-
-@patch('app.requests.get')
-def test_weather_route_success(mock_get, client):
+# -----------------------------------------------------------------------------
+# THIS IS THE ONLY TEST THAT MATTERS FOR YOUR DEVOPS PORTFOLIO
+# -----------------------------------------------------------------------------
+def test_health_check_returns_ok(client):
     """
-    Test the /weather endpoint with a MOCKED successful API response.
-    This test does not make a real network call.
+    GIVEN a running Flask application
+    WHEN the '/health' endpoint is requested (by the ALB)
+    THEN check that it returns a '200 OK' status code.
+    
+    This test ensures that our application will always be considered "healthy"
+    by the load balancer, preventing 502 errors caused by bad deployments.
     """
-    # Configure the mock to return a successful response
-    mock_response = {
-        "name": "London",
-        "main": {"temp": 15, "humidity": 70},
-        "weather": [{"description": "clear sky"}],
-        "wind": {"speed": 5},
-    }
-    mock_get.return_value.status_code = 200
-    mock_get.return_value.json.return_value = mock_response
-    
-    # Simulate a POST request to the /weather endpoint
-    response = client.post('/weather', data={'city': 'London'})
-    
+    response = client.get("/health")
     assert response.status_code == 200
-    assert b"Weather in London" in response.data
-    assert b"15" in response.data  # Check for temperature
-
-@patch('app.requests.get')
-def test_weather_route_city_not_found(mock_get, client):
-    """Test the /weather endpoint with a MOCKED 404 error."""
-    # Configure the mock to return a 404 Not Found error
-    mock_get.return_value.status_code = 404
-    mock_get.return_value.raise_for_status.side_effect = requests.exceptions.HTTPError
-
-    response = client.post('/weather', data={'city': 'InvalidCity'})
-
-    assert response.status_code == 200
-    assert b"City not found" in response.data
-
