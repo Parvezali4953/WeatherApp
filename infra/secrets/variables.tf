@@ -1,9 +1,15 @@
-variable "project"     { type = string }
-variable "environment" { type = string }
-variable "region"      { type = string }
-
-variable "api_key" {
+variable "project_name" {
+  description = "The name of the project."
   type        = string
-  description = "Weather API key"
-  sensitive   = true
+}
+
+variable "environment" {
+  description = "The deployment environment."
+  type        = string
+}
+
+variable "weather_api_key" {
+  description = "The API key for the weather service."
+  type        = string
+  sensitive   = true # Marks the variable as sensitive to prevent it from being shown in logs.
 }

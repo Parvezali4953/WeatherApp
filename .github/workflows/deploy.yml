@@ -1,15 +1,30 @@
+<<<<<<< HEAD
 name: deploy
+=======
+name: Deploy Application to AWS
+
+# This workflow is triggered ONLY on a push to the 'main' branch.
+# This ensures that only reviewed and tested code gets deployed.
+>>>>>>> 2aabb07 (Update whole Folder Structure)
 on:
   push:
     branches: [ "main" ]
 
+# Grant the workflow read permissions on the repository contents.
 permissions:
   contents: read
 
 jobs:
   deploy:
+    name: Build, Push, and Deploy
     runs-on: ubuntu-latest
+
+    # -------------------------------------------------------------------------
+    # Environment Variables: This is the central configuration for the entire job.
+    # All hardcoded names have been replaced with these variables for easy updates.
+    # -------------------------------------------------------------------------
     env:
+<<<<<<< HEAD
       AWS_REGION: ap-south-1
       IMAGE_NAME: weather-app
       
@@ -31,6 +46,20 @@ jobs:
           docker build -t $IMAGE_NAME:$GITHUB_SHA .
 
       # Step 4: Configure AWS credentials
+=======
+      AWS_REGION:                 "ap-south-1"
+      ECR_REPOSITORY:             "weather-app-prod"
+      ECS_CLUSTER_NAME:           "weather-app-prod-cluster"
+      ECS_SERVICE_NAME:           "weather-app-prod-service"
+      ECS_TASK_DEFINITION_FILE:   "infra/ecs/task-definition.json" # Path to the task definition template
+      CONTAINER_NAME:             "weather-app-container"
+    steps:
+      # Step 1: Check out the code.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Configure AWS credentials using long-lived access keys stored as GitHub Secrets.
+>>>>>>> 2aabb07 (Update whole Folder Structure)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -38,6 +67,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+<<<<<<< HEAD
       # Step 5: Login to Amazon ECR
       - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
@@ -84,3 +114,42 @@ jobs:
           ALB=$(terraform -chdir=infra output -raw alb_dns_name)
           curl -fsS "http://$ALB/health"
           echo "✅ Health check passed"
+=======
+      # Step 3: Log in to Amazon ECR.
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      # Step 4: Build the Docker image, tag it with the unique Git commit SHA, and push it to ECR.
+      - name: Build and push Docker image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./app
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # Make the full, unique image URI available to later steps via step output.
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          
+      # Step 5: Render the new task definition.
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.ECS_TASK_DEFINITION_FILE }}
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      # Step 6: Deploy the new task definition to the ECS service.
+      # This action triggers a rolling update of your service to use the new image.
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_NAME }}
+          cluster: ${{ env.ECS_CLUSTER_NAME }}
+          # This flag is crucial. It tells the workflow to wait until the new version
+          # is stable and healthy before marking the job as successful.
+          wait-for-service-stability: true
+>>>>>>> 2aabb07 (Update whole Folder Structure)

@@ -1,32 +1,49 @@
-# Stage 1: Builder - Installs dependencies and prepares the app artifacts.
+# --- Stage 1: Builder ---
+# The goal of this stage is to install Python dependencies in a clean environment.
+# Using a full OS image gives us the tools needed (like gcc) to build any packages.
+FROM python:3.9-slim as builder
 
-FROM python:3.11-slim AS builder
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy requirements.txt FIRST to maximize caching.
+# Best practice: Copy only the requirements file first to leverage Docker's build cache.
+# The layer cache is only invalidated if this file changes, not the entire codebase.
 COPY requirements.txt .
+
+# Install dependencies. The --no-cache-dir flag keeps the image layer smaller.
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code.
-COPY . .
 
-# Stage 2: Runtime - Creates a minimal and secure running environment.
-FROM python:3.11-slim
+# --- Stage 2: Final Image ---
+# This stage builds the final, lightweight image for production.
+# We use a slim base image because it's smaller and has a reduced attack surface.
+FROM python:3.9-slim
+
+# Set the working directory
 WORKDIR /app
 
-# REFINEMENT 1: SECURITY - Create a dedicated non-root user for running the application.
-RUN adduser --system --no-create-home appuser
-USER appuser 
+# Create a non-root user for security purposes.
+# Running as a non-root user is a critical security best practice to limit
+# the blast radius if the application is compromised.
+RUN addgroup --system nonroot && adduser --system --ingroup nonroot nonroot
+USER nonroot
 
-# Copy necessary Python dependencies (runtime)
-COPY --from=builder /usr/local/lib/python3.11 /usr/local/lib/python3.11
-COPY --from=builder /usr/local/bin/gunicorn /usr/local/bin/
+# Copy installed dependencies from the 'builder' stage.
+# This keeps the final image clean, without the build tools from the first stage.
+COPY --from=builder /app /app
 
-# Copy only the necessary application files needed at runtime
-COPY --chown=appuser:appuser app.py .
-COPY --chown=appuser:appuser templates/ ./templates/
-COPY --chown=appuser:appuser static/ ./static/
+# Copy the application code into the final image
+COPY . .
 
+# Expose the port the application will run on.
+# This doesn't publish the port, but documents it and makes it available for mapping.
 EXPOSE 5000
-# Use the absolute path for gunicorn, ensuring it runs as the appuser.
-CMD ["/usr/local/bin/gunicorn", "--workers", "2", "--threads", "2", "--timeout", "60", "--access-logfile", "-", "--bind", "0.0.0.0:5000", "app:app"]
+
+# Set the API_KEY as an environment variable placeholder.
+# Its value will be injected securely at runtime (e.g., by ECS Task Definition).
+# DO NOT hardcode secrets in the Dockerfile.
+ENV API_KEY=""
+
+# The command to run the application using a production-grade WSGI server.
+# Gunicorn is a robust choice for running Flask apps in production.
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]

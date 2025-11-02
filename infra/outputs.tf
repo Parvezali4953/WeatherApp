@@ -1,25 +1,19 @@
-# Output the ALB's DNS name so the user can access the app
-output "alb_dns_name" {
-  value = module.alb.alb_dns_name
-}
-
-# Output the Task Role ARN for reference (Now references module output)
-output "task_role_arn" {
-  value = module.iam.task_role_arn
-}
-
-# Output the Target Group ARN for reference (Now references module output)
-output "target_group_arn" {
-  value = module.alb.target_group_arn
+output "application_url" {
+  description = "The public URL where the application can be accessed."
+  value       = "http://${module.alb.dns_name}"
 }
 
 output "ecs_cluster_name" {
-  value = module.ecs.ecs_cluster_name
+  description = "The name of the ECS Cluster created."
+  value       = module.ecs.ecs_cluster_name
 }
 
-output "ecs_service_name" {
-  value = module.ecs.ecs_service_name 
+output "ecr_repository_url" {
+  description = "The URL of the ECR repository for Docker images."
+  value       = module.ecr.repository_url
 }
-output "ecs_task_definition_arn" {
-  value = module.ecs.ecs_task_definition_arn
+
+output "cloudwatch_log_group_name" {
+  description = "The name of the CloudWatch Log Group where container logs are sent."
+  value       = module.cloudwatch.log_group_name
 }

@@ -1,6 +1,9 @@
-variable "project" { type = string }
-variable "environment" { type = string }
+variable "project_name" {
+  type        = string
+  description = "The name of the project, used as a prefix for resource names."
+}
 
-variable "weather_api_secret_arn" {
-  type = string
+variable "environment" {
+  type        = string
+  description = "The deployment environment (e.g., dev, prod)."
 }

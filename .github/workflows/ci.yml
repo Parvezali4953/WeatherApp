@@ -1,24 +1,36 @@
-name: ci
+name: Run Application Tests
+
+# This workflow is triggered on every push to any branch and every pull request.
+# This ensures that code is tested before it is ever merged into the main branch.
 on: [push, pull_request]
 
 jobs:
   test:
+    name: Run Pytest Suite
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-python@v5
+      # Step 1: Check out the repository's code so the workflow can access it.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up the specific version of Python needed for the application.
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: app/requirements.txt
-          
-      # Combined dependency installation for a cleaner and faster script.
-      - name: Install dependencies and pytest
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r app/requirements.txt pytest
-          
+          python-version: '3.9'
+          # Best Practice: Cache pip dependencies to speed up future builds.
+          # This saves time by not re-downloading packages if requirements.txt hasn't changed.
+          cache: 'pip'
+          cache-dependency-path: 'app/requirements.txt'
+
+      # Step 3: Install the application's dependencies from the requirements file.
+      - name: Install dependencies
+        run: pip install -r app/requirements.txt
+
+      # Step 4: Execute the test suite using pytest.
+      # The 'working-directory' is important because it ensures the tests are run
+      # from within the context of the 'app' folder.
       - name: Run tests
-        working-directory: app
-        run: pytest -q
+        working-directory: ./app
+        run: pytest

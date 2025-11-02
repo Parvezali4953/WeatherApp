@@ -1,24 +1,24 @@
 output "vpc_id" {
-  description = "The ID of the VPC."
-  value       = aws_vpc.this.id
+  description = "The ID of the created VPC."
+  value       = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {
-  description = "List of public subnet IDs."
-  value       = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  description = "A list of IDs for the public subnets."
+  value       = aws_subnet.public[*].id
 }
 
 output "private_subnet_ids" {
-  description = "List of private subnet IDs."
-  value       = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+  description = "A list of IDs for the private subnets."
+  value       = aws_subnet.private[*].id
 }
 
 output "alb_sg_id" {
-  description = "The security group ID for the Application Load Balancer."
+  description = "The ID of the security group for the Application Load Balancer."
   value       = aws_security_group.alb.id
 }
 
-output "app_sg_id" {
-  description = "The security group ID for the ECS Fargate tasks."
-  value       = aws_security_group.app.id
+output "ecs_tasks_sg_id" {
+  description = "The ID of the security group for the ECS tasks."
+  value       = aws_security_group.ecs_tasks.id
 }

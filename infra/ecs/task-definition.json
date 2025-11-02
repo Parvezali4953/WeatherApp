@@ -1,0 +1,21 @@
+[
+  {
+    "name": "${CONTAINER_NAME_PLACEHOLDER}",
+    "image": "${IMAGE_URI_PLACEHOLDER}",
+    "essential": true,
+    "portMappings": [
+      { "containerPort": ${CONTAINER_PORT_PLACEHOLDER}, "protocol": "tcp" }
+    ],
+    "environment": [
+      { "name": "ENVIRONMENT", "value": "${ENVIRONMENT_PLACEHOLDER}" }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${LOG_GROUP_NAME_PLACEHOLDER}",
+        "awslogs-region": "${AWS_REGION_PLACEHOLDER}",
+        "awslogs-stream-prefix": "ecs"
+      }
+    }
+  }
+]

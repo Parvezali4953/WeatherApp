@@ -1,19 +1,24 @@
 terraform {
+  # This block configures the "backend," which tells Terraform where to store
+  # its state file. Using a remote backend is essential for any team project
+  # and a best practice for individual projects.
   backend "s3" {
-    # Replace with your actual S3 bucket name
-    bucket         = "weatherapp-state-bucket" 
-    # Key should be unique for this environment/module
-    key            = "infra/terraform.tfstate"
-    # Match the region used in deploy.yml
-    region         = "ap-south-1" 
-    encrypt        = true
-    
-    # This enables state locking
-    dynamodb_table = "weather-prod-tf-locks" 
-  }
-}
+    # The S3 bucket where the Terraform state file will be stored.
+    # This bucket must be created manually beforehand.
+    bucket = "my-unique-weather-app-tf-state-2025" # <-- Use a globally unique name
 
-provider "aws" {
-  # This region variable is fine here as it's for the provider, not the backend block.
-  region = var.region
+    # The path to the state file within the S3 bucket.
+    key = "prod/infra/terraform.tfstate"
+
+    # The AWS region where the S3 bucket and DynamoDB table exist.
+    region = "ap-south-1"
+
+    # Encrypts the state file at rest in S3, a critical security measure.
+    encrypt = true
+
+    # Enables state locking by using a DynamoDB table. This prevents multiple
+    # people from running 'terraform apply' at the same time, which can
+    # corrupt the state.
+    dynamodb_table = "terraform-state-locks"
+  }
 }
