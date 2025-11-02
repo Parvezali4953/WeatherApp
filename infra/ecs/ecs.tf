@@ -20,21 +20,38 @@ resource "aws_ecs_cluster" "main" {
 # -----------------------------------------------------------------------------
 resource "aws_ecs_task_definition" "main" {
   family                   = "${var.project_name}-${var.environment}-task"
-  requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
   cpu                      = var.container_cpu
   memory                   = var.container_memory
-  execution_role_arn       = var.ecs_task_execution_role_arn
-  task_role_arn            = var.ecs_task_role_arn
 
-  container_definitions = templatefile("${path.module}/task-definition.json", {
-    CONTAINER_NAME_PLACEHOLDER = "${var.project_name}-container"
-    IMAGE_URI_PLACEHOLDER      = var.container_image
-    CONTAINER_PORT_PLACEHOLDER = var.container_port
-    LOG_GROUP_NAME_PLACEHOLDER = "/ecs/${var.project_name}-${var.environment}"
-    AWS_REGION_PLACEHOLDER     = var.aws_region
-    ENVIRONMENT_PLACEHOLDER    = var.environment
-  })
+  # Directly reference the ARNs from the IAM module outputs.
+  execution_role_arn = var.ecs_task_execution_role_arn
+  task_role_arn      = var.ecs_task_role_arn
+
+  # Dynamically generate the JSON for the container definition.
+  container_definitions = jsonencode([
+    {
+      name      = "${var.project_name}-container"
+      image     = var.container_image # This will use the default 'nginx' image on the first apply.
+      essential = true
+      portMappings = [
+        {
+          containerPort = var.container_port
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = module.cloudwatch.log_group_name # Reference the log group from the cloudwatch module.
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
+    }
+  ])
+
   tags = {
     Project     = var.project_name
     Environment = var.environment
