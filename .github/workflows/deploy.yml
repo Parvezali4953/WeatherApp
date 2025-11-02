@@ -1,16 +1,9 @@
-<<<<<<< HEAD
-name: deploy
-=======
 name: Deploy Application to AWS
 
-# This workflow is triggered ONLY on a push to the 'main' branch.
-# This ensures that only reviewed and tested code gets deployed.
->>>>>>> 2aabb07 (Update whole Folder Structure)
 on:
   push:
     branches: [ "main" ]
 
-# Grant the workflow read permissions on the repository contents.
 permissions:
   contents: read
 
@@ -18,48 +11,20 @@ jobs:
   deploy:
     name: Build, Push, and Deploy
     runs-on: ubuntu-latest
-
-    # -------------------------------------------------------------------------
-    # Environment Variables: This is the central configuration for the entire job.
-    # All hardcoded names have been replaced with these variables for easy updates.
-    # -------------------------------------------------------------------------
     env:
-<<<<<<< HEAD
-      AWS_REGION: ap-south-1
-      IMAGE_NAME: weather-app
-      
-    steps:
-      # Step 1: Checkout source code
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Step 2: Set up Python (if needed for build)
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # Step 3: Build Docker image
-      - name: Build Docker image
-        run: |
-          cd app
-          docker build -t $IMAGE_NAME:$GITHUB_SHA .
-
-      # Step 4: Configure AWS credentials
-=======
       AWS_REGION:                 "ap-south-1"
-      ECR_REPOSITORY:             "weather-app-prod"
-      ECS_CLUSTER_NAME:           "weather-app-prod-cluster"
-      ECS_SERVICE_NAME:           "weather-app-prod-service"
-      ECS_TASK_DEFINITION_FILE:   "infra/ecs/task-definition.json" # Path to the task definition template
-      CONTAINER_NAME:             "weather-app-container"
+      ECR_REPOSITORY:             "weather-app-prod"  
+      ECS_CLUSTER_NAME:           "weather-app-prod-cluster"  
+      ECS_SERVICE_NAME:           "weather-app-prod-service"  
+      CONTAINER_NAME:             "weather-app-container"  
+      ECS_TASK_DEFINITION_FILE:   "infra/ecs/task-definition.json"  
+
     steps:
-      # Step 1: Check out the code.
+      # Step 1: Get the code from the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Configure AWS credentials using long-lived access keys stored as GitHub Secrets.
->>>>>>> 2aabb07 (Update whole Folder Structure)
+      # Step 2: Configure AWS credentials using GitHub Secrets
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -67,60 +32,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-<<<<<<< HEAD
-      # Step 5: Login to Amazon ECR
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Step 6: Tag and push image to ECR
-      - name: Push Docker image to ECR
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          REPO_URI="$ACCOUNT_ID.dkr.ecr.${AWS_REGION}.amazonaws.com/weather-prod"
-          
-          # Tag with :latest for easy human reference, and with :SHA for deployment
-          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:latest
-          docker tag $IMAGE_NAME:$GITHUB_SHA $REPO_URI:$GITHUB_SHA
-
-          docker push $REPO_URI:latest
-          docker push $REPO_URI:$GITHUB_SHA
-          
-          # Export the full URI using the immutable SHA tag for Terraform
-          IMAGE_URI_SHA="$REPO_URI:$GITHUB_SHA"
-          echo "IMAGE_URI_SHA=$IMAGE_URI_SHA" >> $GITHUB_ENV
-
-      # Step 7: Setup Terraform
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      # Step 8: Deploy infrastructure and app with Terraform
-      - name: Terraform init and apply
-        working-directory: infra
-        env:
-          TF_VAR_api_key: ${{ secrets.WEATHER_API_KEY }}
-        run: |
-          terraform init -reconfigure
-          terraform apply -auto-approve \
-            -var="region=${AWS_REGION}" \
-            -var="project=weather" \
-            -var="environment=prod" \
-            -var="container_port=5000" \
-            -var="desired_count=1" \
-            -var="container_image=${{ env.IMAGE_URI_SHA }}" # <-- USING IMMUTABLE SHA TAG
-
-      # Step 9: Smoke test the deployed app
-      - name: Smoke test /health endpoint
-        run: |
-          ALB=$(terraform -chdir=infra output -raw alb_dns_name)
-          curl -fsS "http://$ALB/health"
-          echo "✅ Health check passed"
-=======
-      # Step 3: Log in to Amazon ECR.
+      # Step 3: Log in to Amazon ECR
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
-      # Step 4: Build the Docker image, tag it with the unique Git commit SHA, and push it to ECR.
+      # Step 4: Build, tag, and push image to Amazon ECR
       - name: Build and push Docker image
         id: build-image
         env:
@@ -129,10 +46,9 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./app
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          # Make the full, unique image URI available to later steps via step output.
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
           
-      # Step 5: Render the new task definition.
+      # Step 5: Render the new task definition with the updated image URI
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: render-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -141,15 +57,11 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
-      # Step 6: Deploy the new task definition to the ECS service.
-      # This action triggers a rolling update of your service to use the new image.
+      # Step 6: Deploy the new task definition to the ECS service
       - name: Deploy Amazon ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
           task-definition: ${{ steps.render-task-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE_NAME }}
           cluster: ${{ env.ECS_CLUSTER_NAME }}
-          # This flag is crucial. It tells the workflow to wait until the new version
-          # is stable and healthy before marking the job as successful.
           wait-for-service-stability: true
->>>>>>> 2aabb07 (Update whole Folder Structure)
