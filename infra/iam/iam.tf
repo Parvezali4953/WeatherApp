@@ -67,5 +67,29 @@ resource "aws_iam_role" "ecs_task_role" {
   }
 }
 
+# 4. IAM Policy for Secrets Manager Access
+#
+# This policy grants the ECS Task Execution Role the specific permission
+# it needs to fetch the application's API key from AWS Secrets Manager.
+# -----------------------------------------------------------------------------
+resource "aws_iam_policy" "secrets_access_policy" {
+  name        = "${var.project_name}-${var.environment}-secrets-access-policy"
+  description = "Allows access to specific Secrets Manager secrets."
 
- 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = var.secrets_manager_secret_arn # Grant permission only to this specific secret
+      },
+    ]
+  })
+}
+
+# Attach the new secrets policy to the ECS Task Execution Role.
+resource "aws_iam_role_policy_attachment" "secrets_policy_attachment" {
+  role       = aws_iam_role.ecs_task_execution_role.name
+  policy_arn = aws_iam_policy.secrets_access_policy.arn
+}

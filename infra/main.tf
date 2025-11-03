@@ -25,6 +25,7 @@ module "iam" {
 
   project_name = var.project_name
   environment  = var.environment
+  secrets_manager_secret_arn = module.secrets.secret_arn
 }
 
 module "ecr" {
