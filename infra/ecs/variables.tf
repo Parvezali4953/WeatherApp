@@ -1,5 +1,3 @@
-# infra/ecs/variables.tf
-
 variable "project_name" {
   description = "The name of the project."
   type        = string
@@ -79,4 +77,14 @@ variable "max_tasks" {
   description = "The maximum number of tasks to run for autoscaling."
   type        = number
   default     = 3
+}
+
+variable "secret_arn" {
+  description = "The ARN of the secret to be injected into the container."
+  type        = string
+}
+
+variable "log_group_name" {
+  description = "The name of the CloudWatch Log Group for the container logs."
+  type        = string
 }

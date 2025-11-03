@@ -54,9 +54,9 @@ module "alb" {
 
   project_name      = var.project_name
   environment       = var.environment
-  vpc_id            = module.networking.vpc_id # <-- Uses output from networking module
-  public_subnet_ids = module.networking.public_subnet_ids # <-- Uses output
-  alb_sg_id         = module.networking.alb_sg_id # <-- Uses output
+  vpc_id            = module.networking.vpc_id  
+  public_subnet_ids = module.networking.public_subnet_ids  
+  alb_sg_id         = module.networking.alb_sg_id  
   container_port    = var.container_port
 }
 
@@ -66,12 +66,14 @@ module "ecs" {
   project_name                = var.project_name
   environment                 = var.environment
   aws_region                  = var.aws_region
-  private_subnet_ids          = module.networking.private_subnet_ids # <-- Uses output
-  ecs_sg_id                   = module.networking.ecs_tasks_sg_id # <-- Uses output
-  ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn # <-- Uses output from iam module
-  ecs_task_role_arn           = module.iam.ecs_task_role_arn # <-- Uses output
-  alb_target_group_arn        = module.alb.target_group_arn # <-- Uses output from alb module
+  private_subnet_ids          = module.networking.private_subnet_ids  
+  ecs_sg_id                   = module.networking.ecs_tasks_sg_id  
+  ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn  
+  ecs_task_role_arn           = module.iam.ecs_task_role_arn  
+  alb_target_group_arn        = module.alb.target_group_arn  
   alb_listener                = module.alb.listener
   container_image             = var.container_image
   container_port              = var.container_port
+  secret_arn                  = module.secrets.secret_arn
+  log_group_name              = module.cloudwatch.log_group_name
 }

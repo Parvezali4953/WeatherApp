@@ -25,7 +25,6 @@ resource "aws_ecs_task_definition" "main" {
   cpu                      = var.container_cpu
   memory                   = var.container_memory
 
-  # Directly reference the ARNs from the IAM module outputs.
   execution_role_arn = var.ecs_task_execution_role_arn
   task_role_arn      = var.ecs_task_role_arn
 
@@ -33,18 +32,28 @@ resource "aws_ecs_task_definition" "main" {
   container_definitions = jsonencode([
     {
       name      = "${var.project_name}-container"
-      image     = var.container_image # This will use the default 'nginx' image on the first apply.
+      image     = var.container_image
       essential = true
       portMappings = [
         {
           containerPort = var.container_port
           protocol      = "tcp"
         }
-      ]
+      ],
+     
+      # This 'secrets' block tells ECS to inject the API key from Secrets Manager
+      # into the container as an environment variable named 'API_KEY'.
+      secrets = [
+        {
+          name      = "API_KEY"
+          valueFrom = var.secret_arn
+        }
+      ],
+     
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = module.cloudwatch.log_group_name # Reference the log group from the cloudwatch module.
+          "awslogs-group"         = var.log_group_name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
         }
