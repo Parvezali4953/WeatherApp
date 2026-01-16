@@ -14,8 +14,6 @@ A high-level overview of the infrastructure:
 4.  All infrastructure is managed by Terraform, with its state stored securely in an S3 backend.
 5.  A push to GitHub triggers the CI/CD pipeline, which deploys a new version.
 
-*(It is highly recommended to create a simple visual diagram, using a tool like diagrams.net or Excalidraw, and add a screenshot of it here.)*
-
 ## 🚀 Key Technologies & Services
 
 | Category                     | Tools & Services                                                    | Purpose                                                                                                                             |
@@ -121,3 +119,4 @@ To avoid ongoing AWS charges, you should destroy the infrastructure when you are
     terraform destroy --auto-approve
     ```
 ```
+
